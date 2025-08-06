@@ -148,21 +148,23 @@ function evaluateTestFunction(functionName, phi, theta, a = 1) {
     }
 }
 
-// Analytical values for some test functions (normalized over sphere)
+// Analytical values for test functions (exact integrals, before normalization)
+// These match the Python reference implementation exactly
 const analyticalValues = {
-    'f1': 216 * Math.PI / 35 / (4 * Math.PI),
-    'f2': 6.6961822200736179253 / (4 * Math.PI),
-    'f3': function (a) { return Math.PI / a; },
-    'f4': function (a) { return Math.PI / a; },
-    'f5': function (a) { return Math.PI / a; },
-    'constant': 1,
-    'cosine': 0,
-    'sine2': 2 / 3,
-    'harmonic': 0
+    'f1': 216 * Math.PI / 35,  // f_1_exact from Python
+    'f2': 6.6961822200736179253,  // f_2_exact from Python
+    'f3': function (a) { return 4 * Math.PI / a; },  // f_3_exact from Python
+    'f4': function (a) { return 4 * Math.PI / a; },  // f_4_exact from Python  
+    'f5': function (a) { return 4 * Math.PI / a; },  // f_5_exact from Python
+    'constant': 4 * Math.PI,  // Integral of 1 over sphere = 4π
+    'cosine': 0,      // cos(φ) integrates to 0 over sphere
+    'sine2': 8 * Math.PI / 3,  // sin²(φ) integral over sphere
+    'harmonic': 0,    // Non-zero harmonics integrate to 0
+    'exp': function (a) { return 4 * Math.PI * (Math.sinh(a) / a - Math.cosh(a) + 1); }
 };
 
 // Get analytical value for a test function
-function getAnalyticalValue(functionName, a = 1) {   
+function getAnalyticalValue(functionName, a = 1) {
     if (functionName in analyticalValues) {
         let value = analyticalValues[functionName];
         if (typeof value === 'function') {

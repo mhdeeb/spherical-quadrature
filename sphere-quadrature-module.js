@@ -297,8 +297,7 @@ const AVAILABLE_FILES = {
         21: [240]
     },
     'WomersleySym': {
-        // Symmetric designs start from degree 1, step by 2 (odd degrees only)
-        // Format: degree -> point_count (extracted from filenames)
+        // Symmetric designs - point counts extracted from actual filenames
         1: 2, 3: 6, 5: 12, 7: 32, 9: 48, 11: 70, 13: 94, 15: 120, 17: 156, 19: 192,
         21: 234, 23: 278, 25: 328, 27: 380, 29: 438, 31: 498, 33: 564, 35: 632,
         37: 706, 39: 782, 41: 864, 43: 948, 45: 1038, 47: 1130, 49: 1228, 51: 1328,
@@ -575,25 +574,20 @@ async function findSphericalDesignFiles(type, degree) {
     let pointCountsToTry = [];
 
     if (type === 'HardinSloane') {
-        // HardinSloane has specific point counts per degree
-        const hsPointCounts = {
-            1: [2], 2: [4], 3: [6, 8, 10, 11, 13, 15, 24], 4: [14, 17, 19, 21],
-            5: [12, 16, 18, 20, 22, 23, 25, 27, 60], 6: [26, 28, 29, 31, 33, 35],
-            7: [24, 30, 32, 34, 37, 38, 39, 41, 43], 8: [36, 40, 42, 44, 45, 46, 47, 49, 51, 53],
-            9: [48, 50, 52, 54, 55, 56, 57, 58, 59, 60, 61, 63], 10: [60, 62, 64, 65, 66, 67, 68, 69, 71, 73],
-            11: [70, 72, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 85], 12: [84, 86, 87, 88, 89, 90, 91, 92, 93, 95, 97, 99],
-            13: [94, 96, 98, 100], 14: [108], 15: [120, 132], 16: [144], 17: [156], 18: [180], 19: [204], 20: [216], 21: [240]
-        };
-        pointCountsToTry = hsPointCounts[degree] || [];
+        // HardinSloane files - use point counts from AVAILABLE_FILES mapping
+        pointCountsToTry = AVAILABLE_FILES['HardinSloane'][degree] || [];
     } else if (type === 'WomersleySym') {
-        // WomersleySym files use the pattern ss{degree:03d}.{points:05d}
-        // Generate reasonable point counts based on degree
-        const basePoints = degree * degree * 2;
-        pointCountsToTry = [basePoints - 10, basePoints - 5, basePoints, basePoints + 5, basePoints + 10, basePoints + 20, basePoints + 50];
+        // WomersleySym files - use exact point counts from AVAILABLE_FILES mapping
+        const actualPoints = AVAILABLE_FILES['WomersleySym'][degree];
+        if (actualPoints) {
+            pointCountsToTry = [actualPoints];
+        }
     } else if (type === 'WomersleyNonSym') {
-        // WomersleyNonSym files use the pattern sf{degree:03d}.{points:05d}
-        const basePoints = degree * degree * 3;
-        pointCountsToTry = [basePoints - 15, basePoints - 8, basePoints, basePoints + 8, basePoints + 15, basePoints + 30];
+        // WomersleyNonSym files - use exact point counts from AVAILABLE_FILES mapping
+        const actualPoints = AVAILABLE_FILES['WomersleyNonSym'][degree];
+        if (actualPoints) {
+            pointCountsToTry = [actualPoints];
+        }
     }
 
     // Try to find actual files by testing a few likely filenames

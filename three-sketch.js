@@ -309,8 +309,68 @@ function animate() {
     // Render
     renderer.render(scene, camera);
 
-    // Update info panel
-    updateInfoPanel();
+    // Update info panel only when needed
+    updateInfoPanelIfNeeded();
+}
+
+function updateInfoPanelIfNeeded() {
+    if (needsInfoPanelUpdate) {
+        updateInfoPanel();
+        needsInfoPanelUpdate = false;
+    }
+}
+
+// Helper function to create simple harmonic display name for GUI
+function getSphericalHarmonicDisplayName(l, m) {
+    // Unicode subscript digits: ₀₁₂₃₄₅₆₇₈₉
+    const subscriptDigits = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
+    // Unicode superscript digits: ⁰¹²³⁴⁵⁶⁷⁸⁹
+    const superscriptDigits = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+
+    // Convert l to subscript
+    const lStr = l.toString();
+    const subscript = lStr.split('').map(digit => subscriptDigits[parseInt(digit)]).join('');
+
+    // Convert m to superscript (handle negative values)
+    const absM = Math.abs(m);
+    const mStr = absM.toString();
+    const superscript = mStr.split('').map(digit => superscriptDigits[parseInt(digit)]).join('');
+    const finalSuperscript = m >= 0 ? superscript : `⁻${superscript}`;
+
+    return `Y${subscript}${finalSuperscript}`;
+}
+
+// Helper function to create formatted spherical harmonic names
+function getSphericalHarmonicName(l, m) {
+    // Format the superscript for negative values
+    const superscript = m >= 0 ? m : `−${Math.abs(m)}`;
+
+    // Create the main Y notation
+    const yNotation = `Y<sub>${l}</sub><sup>${superscript}</sup>(θ,φ)`;
+
+    // Add descriptive names for common harmonics
+    const descriptions = {
+        '0,0': 'constant',
+        '1,-1': 'y-component',
+        '1,0': 'z-component',
+        '1,1': 'x-component',
+        '2,-2': 'xy-plane rotation',
+        '2,-1': 'yz-plane',
+        '2,0': 'prolate (3z²−r²)',
+        '2,1': 'xz-plane',
+        '2,2': 'oblate (x²−y²)',
+        '3,0': 'z(5z²−3r²)',
+        '4,0': '35z⁴−30z²r²+3r⁴'
+    };
+
+    const key = `${l},${m}`;
+    const description = descriptions[key];
+
+    if (description) {
+        return `${yNotation} <span class="info-detail">(${description})</span>`;
+    }
+
+    return yNotation;
 }
 
 function updateInfoPanel() {
@@ -373,18 +433,20 @@ function updateInfoPanel() {
     if (window.currentMode === 'harmonics') {
         content += `<div class="info-section">`;
         content += `<div class="info-header">🌐 Spherical Harmonic</div>`;
-        content += `<div class="info-row"><span class="info-label">Function:</span> Y<sub>${window.harmonicL}</sub><sup>${window.harmonicM}</sup>(θ,φ)</div>`;
-        content += `<div class="info-row"><span class="info-label">Degree (L):</span> ${window.harmonicL}</div>`;
-        content += `<div class="info-row"><span class="info-label">Order (M):</span> ${window.harmonicM}</div>`;
+        const harmonicName = getSphericalHarmonicDisplayName(window.harmonicL, window.harmonicM);
+        content += `<div class="info-row"><span class="info-label">Function:</span> ${harmonicName}(θ,φ)</div>`;
+        content += `<div class="info-row"><span class="info-label">Degree (ℓ):</span> ${window.harmonicL}</div>`;
+        content += `<div class="info-row"><span class="info-label">Order (m):</span> ${window.harmonicM}</div>`;
         content += `</div>`;
     } else if (window.currentMode === 'function') {
         content += `<div class="info-section">`;
         content += `<div class="info-header">📈 Test Function</div>`;
         const functionNames = {
-            'f1': 'Polynomial (f₁)',
-            'f2': 'Gaussian Peaks (f₂)',
-            'f3': 'Hyperbolic Tangent (f₃)',
-            'f4': 'Spherical Harmonic (f₄)'
+            'f1': 'f₁: x² + y² + z²',
+            'f2': 'f₂: x',
+            'f3': 'f₃: x × y',
+            'f4': 'f₄: exp(x + y + z)',
+            'f5': 'f₅: cos(a × φ)'
         };
         content += `<div class="info-row"><span class="info-label">Function:</span> ${functionNames[window.currentTestFunction] || window.currentTestFunction}</div>`;
         content += `<div class="info-row"><span class="info-label">Parameter:</span> ${window.functionParam.toFixed(3)}</div>`;
@@ -413,51 +475,94 @@ function computeIntegrationResults() {
 
     try {
         if (window.currentMode === 'function') {
-            // Function integration
-            for (let i = 0; i < quadraturePoints.length; i++) {
+            // Function integration - following Python reference implementation
+            let f_mean = 0;
+            const N = quadraturePoints.length;
+
+            for (let i = 0; i < N; i++) {
                 const point = quadraturePoints[i];
                 const phi = point.phi !== undefined ? point.phi : Math.acos(Math.max(-1, Math.min(1, point.z / Math.sqrt(point.x * point.x + point.y * point.y + point.z * point.z))));
                 const theta = point.theta !== undefined ? point.theta : Math.atan2(point.y, point.x);
                 const funcValue = evaluateTestFunction(window.currentTestFunction, phi, theta, window.functionParam);
-                const weight = point.weight !== undefined ? point.weight : (1.0 / quadraturePoints.length);
 
                 if (window.currentQuadMethod === 'monte_carlo_uniform') {
-                    numericalValue += funcValue * weight * 4 * Math.PI;
+                    // Python: V = 4π, sum func values, then f_mean * V / (4π)
+                    f_mean += funcValue;
                 } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
-                    numericalValue += funcValue * weight * 2 * Math.PI * Math.PI;
+                    // Python: V = 2π², sum func * sin(phi), then f_mean * V / (4π)  
+                    f_mean += funcValue * Math.sin(phi);
                 } else if (window.currentQuadMethod === 'lebedev') {
+                    // Python: sum w[i] * func, weights already normalized
+                    const weight = point.weight !== undefined ? point.weight : (1.0 / N);
                     numericalValue += funcValue * weight;
                 } else if (window.currentQuadMethod === 'product') {
+                    // Product quadrature - assume already normalized
+                    const weight = point.weight !== undefined ? point.weight : (1.0 / N);
                     numericalValue += funcValue * weight;
-                } else {
-                    numericalValue += funcValue * weight * 4 * Math.PI;
+                } else if (window.currentQuadMethod === 'spherical_design') {
+                    // Python: sum func values, then divide by N
+                    f_mean += funcValue;
                 }
             }
+
+            // Apply Monte Carlo and Spherical Design normalization
+            if (window.currentQuadMethod === 'monte_carlo_uniform') {
+                f_mean = f_mean / N;
+                const V = 4 * Math.PI;
+                numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean
+            } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
+                f_mean = f_mean / N;
+                const V = 2 * Math.PI * Math.PI;
+                numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean * π/2
+            } else if (window.currentQuadMethod === 'spherical_design') {
+                numericalValue = f_mean / N;  // Simple average
+            }
+
+            // Get analytical value and normalize
             analyticalValue = getAnalyticalValue(window.currentTestFunction, window.functionParam);
             if (analyticalValue !== null) {
                 analyticalValue = analyticalValue / (4 * Math.PI);
             }
         } else if (window.currentMode === 'harmonics') {
-            // Spherical harmonic integration
-            for (let i = 0; i < quadraturePoints.length; i++) {
+            // Spherical harmonic integration - following Python reference implementation
+            let f_mean = 0;
+            const N = quadraturePoints.length;
+
+            for (let i = 0; i < N; i++) {
                 const point = quadraturePoints[i];
                 const phi = point.phi !== undefined ? point.phi : Math.acos(Math.max(-1, Math.min(1, point.z / Math.sqrt(point.x * point.x + point.y * point.y + point.z * point.z))));
                 const theta = point.theta !== undefined ? point.theta : Math.atan2(point.y, point.x);
                 const ylm = sphericalHarmonic(window.harmonicL, window.harmonicM, theta, phi);
-                const weight = point.weight !== undefined ? point.weight : (1.0 / quadraturePoints.length);
 
                 if (window.currentQuadMethod === 'monte_carlo_uniform') {
-                    numericalValue += ylm * weight * 4 * Math.PI;
+                    f_mean += ylm;
                 } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
-                    numericalValue += ylm * weight * 2 * Math.PI * Math.PI;
+                    f_mean += ylm * Math.sin(phi);
                 } else if (window.currentQuadMethod === 'lebedev') {
+                    const weight = point.weight !== undefined ? point.weight : (1.0 / N);
                     numericalValue += ylm * weight;
                 } else if (window.currentQuadMethod === 'product') {
+                    const weight = point.weight !== undefined ? point.weight : (1.0 / N);
                     numericalValue += ylm * weight;
-                } else {
-                    numericalValue += ylm * weight * 4 * Math.PI;
+                } else if (window.currentQuadMethod === 'spherical_design') {
+                    f_mean += ylm;
                 }
             }
+
+            // Apply Monte Carlo and Spherical Design normalization
+            if (window.currentQuadMethod === 'monte_carlo_uniform') {
+                f_mean = f_mean / N;
+                const V = 4 * Math.PI;
+                numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean
+            } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
+                f_mean = f_mean / N;
+                const V = 2 * Math.PI * Math.PI;
+                numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean * π/2
+            } else if (window.currentQuadMethod === 'spherical_design') {
+                numericalValue = f_mean / N;  // Simple average
+            }
+
+            // For spherical harmonics: Y₀⁰ integrates to √(4π), normalized by 4π gives 1/√(4π)
             analyticalValue = (window.harmonicL === 0 && window.harmonicM === 0) ? 1 / (4 * Math.PI) : 0;
         }
 
@@ -500,6 +605,7 @@ function computeIntegrationResults() {
 }
 
 let needsUpdate = false;
+let needsInfoPanelUpdate = false;
 
 function updateVisualizationIfNeeded() {
     if (needsUpdate) {
@@ -508,7 +614,7 @@ function updateVisualizationIfNeeded() {
         updateQuadratureVisualization(window.forcePointRecreation || false);
         updateSurfaceVisualization();
         updateSphereAppearance();
-        updateInfoPanel(); // Ensure info panel reflects current state
+        needsInfoPanelUpdate = true; // Ensure info panel reflects current state
         needsUpdate = false;
         window.forcePointRecreation = false; // Reset the flag
         console.log('Visualization update complete');
@@ -688,6 +794,12 @@ const DISPLAY_ONLY_PROPERTIES = [
     'pointSize', 'autoRotate', 'rotationSpeed'
 ];
 
+// Properties that affect the info panel content
+const INFO_PANEL_AFFECTING_PROPERTIES = [
+    'quadMethod', 'sphericalDesignType', 'numPoints',
+    'mode', 'harmonicL', 'harmonicM', 'testFunction', 'functionParam'
+];
+
 // State update function with automatic synchronization
 function updateState(updates) {
     // Store old state for change notification
@@ -715,6 +827,15 @@ function updateState(updates) {
         QUADRATURE_AFFECTING_PROPERTIES.includes(key)
     );
 
+    // Determine if info panel needs updating
+    const hasInfoPanelPropertyChange = Object.keys(validatedUpdates).some(key =>
+        INFO_PANEL_AFFECTING_PROPERTIES.includes(key)
+    );
+
+    if (hasInfoPanelPropertyChange) {
+        needsInfoPanelUpdate = true;
+    }
+
     if (hasQuadraturePropertyChange) {
         // Smart check: only regenerate if the actual effective points would change
         const oldEffectivePoints = getEffectiveNumPointsForState(oldState);
@@ -734,8 +855,6 @@ function updateState(updates) {
             triggerUpdate(true); // Force point recreation for quadrature changes
         } else {
             console.log(`🎯 Desired points changed but effective points unchanged (${newEffectivePoints}), skipping regeneration`);
-            // Update info panel to show the new desired vs effective values
-            updateInfoPanel();
         }
     } else {
         console.log('🎨 Display-only change detected, updating visualization...');
@@ -744,8 +863,6 @@ function updateState(updates) {
         updateSurfaceVisualization();
         updateSphereAppearance();
     }
-
-    updateInfoPanel();
 }
 
 function validateStateUpdates(updates) {
@@ -1098,7 +1215,7 @@ function initializeGUI() {
     // Spherical Harmonics folder
     const harmonicsFolder = gui.addFolder('Spherical Harmonics');
     window.harmonicsFolder = harmonicsFolder;
-    const lController = harmonicsFolder.add(settings, 'harmonicL', 0, 10, 1).name('L (degree)').onChange(value => {
+    const lController = harmonicsFolder.add(settings, 'harmonicL', 0, 10, 1).name('ℓ (degree)').onChange(value => {
         // Ensure M is valid for the new L value
         const newM = Math.min(settings.harmonicM, value);
         updateState({ harmonicL: value, harmonicM: newM });
@@ -1110,7 +1227,7 @@ function initializeGUI() {
         }
     });
 
-    const mController = harmonicsFolder.add(settings, 'harmonicM', 0, 2, 1).name('M (order)').onChange(value => {
+    const mController = harmonicsFolder.add(settings, 'harmonicM', 0, 2, 1).name('m (order)').onChange(value => {
         updateState({ harmonicM: value });
     });
 
@@ -1118,11 +1235,11 @@ function initializeGUI() {
     const functionsFolder = gui.addFolder('Test Functions');
     window.functionsFolder = functionsFolder;
     functionsFolder.add(settings, 'testFunction', {
-        'f1: x² + y² + z²': 'f1',
-        'f2: x': 'f2',
-        'f3: x * y': 'f3',
-        'f4: exp(x + y + z)': 'f4',
-        'f5: cos(a * φ)': 'f5'
+        'f₁: x² + y² + z²': 'f1',
+        'f₂: x': 'f2',
+        'f₃: x × y': 'f3',
+        'f₄: exp(x + y + z)': 'f4',
+        'f₅: cos(a × φ)': 'f5'
     }).name('Function').onChange(value => {
         updateState({ testFunction: value });
     });
@@ -1200,4 +1317,6 @@ window.setAppState = setAppState;
 window.getAppState = getAppState;
 window.syncStateToGUI = syncStateToGUI;
 window.addStateChangeListener = addStateChangeListener;
+window.removeStateChangeListener = removeStateChangeListener;
+window.removeStateChangeListener = removeStateChangeListener;
 window.removeStateChangeListener = removeStateChangeListener;
