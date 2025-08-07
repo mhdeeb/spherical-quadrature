@@ -11,10 +11,7 @@ import {
     generateProductQuadrature,
     generateSphericalDesign,
     SPHERICAL_DESIGN_TYPES,
-    getClosestLebedevOrder,
-    getClosestSphericalDesign,
-    sphericalDesignFileExists,
-    lebedevOrderExists
+    getClosestSphericalDesign
 } from './sphere-quadrature-module.js';
 
 // Import other functions as needed
@@ -55,7 +52,7 @@ window.rotationSpeed = 1.0;
 // Quadrature data
 let quadraturePoints = [];
 
-function init() {
+async function init() {
     // Create scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
@@ -122,7 +119,7 @@ function init() {
 
     // Generate initial quadrature points
     console.log('Initializing with default quadrature points');
-    updateQuadraturePoints();
+    await updateQuadraturePoints();
 
     // Force initial update
     triggerUpdate();
@@ -607,10 +604,10 @@ function computeIntegrationResults() {
 let needsUpdate = false;
 let needsInfoPanelUpdate = false;
 
-function updateVisualizationIfNeeded() {
+async function updateVisualizationIfNeeded() {
     if (needsUpdate) {
         console.log('Updating visualization...');
-        updateQuadraturePoints(); // Ensure points are generated first
+        await updateQuadraturePoints(); // Ensure points are generated first
         updateQuadratureVisualization(window.forcePointRecreation || false);
         updateSurfaceVisualization();
         updateSphereAppearance();
@@ -650,7 +647,7 @@ function triggerUpdate(forcePointRecreation = false) {
 
 
 
-function updateQuadraturePoints() {
+async function updateQuadraturePoints() {
     const desiredPoints = window.numPoints;
     const calculationPoints = getEffectiveNumPoints();
 
@@ -673,7 +670,12 @@ function updateQuadraturePoints() {
                 points = generateMonteCarloClustered(calculationPoints);
                 break;
             case 'lebedev':
-                points = generateLebedevPoints(calculationPoints);
+                console.log('📊 Loading Lebedev points...');
+                points = await generateLebedevPoints(calculationPoints);
+                if (!points) {
+                    console.warn('Lebedev data not available, falling back to Monte Carlo');
+                    points = generateMonteCarloUniform(calculationPoints);
+                }
                 break;
             case 'product':
                 points = generateProductQuadrature(calculationPoints);
@@ -926,7 +928,7 @@ function getEffectiveNumPointsForState(state) {
     switch (method) {
         case 'lebedev':
             // Lebedev has fixed orders - find closest available
-            return getClosestLebedevOrderPoints(maxPoints);
+            // return getClosestLebedevOrderPoints(maxPoints);
 
         case 'spherical_design':
             // Spherical designs have specific available points - find closest
@@ -939,12 +941,6 @@ function getEffectiveNumPointsForState(state) {
             // These methods can generate any number of points
             return maxPoints;
     }
-}
-
-// Find closest available Lebedev order to desired number (wrapper)
-function getClosestLebedevOrderPoints(desired) {
-    const result = getClosestLebedevOrder(desired);
-    return result.points;
 }
 
 // Find closest available spherical design points to desired number (wrapper)
@@ -1082,7 +1078,13 @@ function notifyStateChange(oldState, newState) {
 }
 
 // Initialize the application
-window.addEventListener('load', init);
+window.addEventListener('load', async () => {
+    try {
+        await init();
+    } catch (error) {
+        console.error('Failed to initialize application:', error);
+    }
+});
 window.addEventListener('resize', onWindowResize);
 
 // Export functions for UI controls
@@ -1168,7 +1170,7 @@ function initializeGUI() {
         updateSphericalDesignVisibility(value);
     });
 
-    quadFolder.add(settings, 'numPoints', 0, 10000, 10).name('Points').onChange(value => {
+    quadFolder.add(settings, 'numPoints', 0, 10000, 1).name('Points').onChange(value => {
         updateState({ numPoints: value });
     });
 

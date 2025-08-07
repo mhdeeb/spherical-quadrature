@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "Interactive 3D spherical quadrature visualization using Three.js",
   "main": "index.html",
+  "type": "module",
   "scripts": {
     "start": "python -m http.server 8000",
     "serve": "npx serve .",

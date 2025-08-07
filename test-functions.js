@@ -1,7 +1,7 @@
 // Test functions for spherical integration
 
 // Export for ES6 modules
-export { evaluateTestFunction, getAnalyticalValue, getFunctionRange };
+export { evaluateTestFunction, getAnalyticalValue, getFunctionRange, availableTestFunctions, computeIntegrationError };
 
 // Coordinate conversion helpers
 function sphericalToCartesian(phi, theta) {
@@ -85,6 +85,16 @@ function testFunction5(phi, theta, a = 9) {
     return (1 + Math.sign(-a * (Math.PI * x + y))) / (1.0 * a);
 }
 
+// Simplified spherical harmonic function (Y_2^1)
+function sphericalHarmonic(l, m, theta, phi) {
+    // Simplified implementation for Y_2^1
+    if (l === 2 && m === 1) {
+        return -Math.sqrt(15 / (8 * Math.PI)) * Math.sin(phi) * Math.cos(phi) * Math.cos(theta);
+    }
+    // Default to Y_0^0 = 1/sqrt(4π)
+    return 1 / Math.sqrt(4 * Math.PI);
+}
+
 // Simple harmonic function for testing
 function harmonicFunction(phi, theta, l = 2, m = 1) {
     return sphericalHarmonic(l, m, theta, phi);
@@ -150,7 +160,7 @@ function evaluateTestFunction(functionName, phi, theta, a = 1) {
 
 // Analytical values for test functions (exact integrals, before normalization)
 // These match the Python reference implementation exactly
-const analyticalValues = {
+export const analyticalValues = {
     'f1': 216 * Math.PI / 35,  // f_1_exact from Python
     'f2': 6.6961822200736179253,  // f_2_exact from Python
     'f3': function (a) { return 4 * Math.PI / a; },  // f_3_exact from Python
@@ -216,3 +226,21 @@ function getFunctionRange(functionName, a = 1, resolution = 50) {
 
     return { min: minVal, max: maxVal };
 }
+
+export const testFunctions = {
+    'f1': testFunction1,
+    'f2': testFunction2,
+    'f3': testFunction3,
+    'f4': testFunction4,
+    'f5': testFunction5,
+    'polynomial': testFunction1,
+    'gaussian': testFunction2,
+    'tanh': testFunction3,
+    'sign1': testFunction4,
+    'sign2': testFunction5,
+    'harmonic': harmonicFunction,
+    'constant': constantFunction,
+    'cosine': cosinePolarFunction,
+    'sine2': sineSquaredFunction,
+    'exp': exponentialFunction
+};
