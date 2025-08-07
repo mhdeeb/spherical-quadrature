@@ -1,9 +1,7 @@
-// Three.js implementation for spherical quadrature visualization
-import * as THREE from './js/three.module.min.js';
-import { OrbitControls } from './js/OrbitControls.js';
-import lilGui from './js/lil-gui.js';
+import * as THREE from '../lib/three.module.min.js';
+import { OrbitControls } from '../lib/OrbitControls.js';
+import lilGui from '../lib/lil-gui.js';
 
-// Import quadrature methods
 import {
     generateMonteCarloUniform,
     generateMonteCarloClustered,
@@ -14,16 +12,12 @@ import {
 
 import testFunctions from './test-functions.js';
 
-// Three.js core objects
 let scene, camera, renderer, controls;
 let sphereGroup, pointGroup, surfaceGroup;
 
-// Sphere parameters
 let sphereRadius = 2;
 let sphereGeometry, sphereMaterial, sphereMesh;
 
-// Current visualization state (exposed to window for UI access)
-// These will be properly initialized by syncStateToWindow() after appState is defined
 window.currentMode = 'harmonics';
 window.currentQuadMethod = 'monte_carlo_uniform';
 window.numPoints = 100;
@@ -32,46 +26,37 @@ window.harmonicM = 0;
 window.currentTestFunction = 'f1';
 window.functionParam = 1.0;
 
-// Display options (exposed to window for UI access)
 window.showSphere = true;
 window.showPoints = true;
 window.showColorMap = true;
 window.wireframe = false;
-window.pointSize = 6; // Fixed: was 0.03, should match appState.pointSize = 6
+window.pointSize = 6;
 window.sphereOpaque = false;
 
-// Animation (exposed to window for UI access)
 window.autoRotate = true;
 window.rotationSpeed = 1.0;
 
-// Quadrature data
 let quadraturePoints = [];
 
 async function init() {
-    // Create scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
 
-    // Create camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 0, 5);
 
-    // Create renderer
     renderer = new THREE.WebGLRenderer({
         antialias: true,
         preserveDrawingBuffer: false // Prevent canvas copying
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    // Shadows disabled since we removed directional lighting
     renderer.shadowMap.enabled = false;
 
-    // Disable right-click context menu on canvas
     renderer.domElement.addEventListener('contextmenu', function (e) {
         e.preventDefault();
         return false;
     });
 
-    // Additional canvas protection
     renderer.domElement.addEventListener('dragstart', function (e) {
         e.preventDefault();
         return false;
@@ -82,22 +67,18 @@ async function init() {
         return false;
     });
 
-    // Add renderer to DOM
     const container = document.getElementById('canvas-container');
     container.appendChild(renderer.domElement);
 
-    // Add orbit controls (manual only, no auto-rotation)
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enableZoom = true;
-    controls.autoRotate = false; // Disable - we'll rotate objects instead
+    controls.autoRotate = false;
 
-    // Create uniform ambient lighting (no directional shadows)
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
     scene.add(ambientLight);
 
-    // Create groups for organization
     sphereGroup = new THREE.Group();
     pointGroup = new THREE.Group();
     surfaceGroup = new THREE.Group();
@@ -106,33 +87,25 @@ async function init() {
     scene.add(pointGroup);
     scene.add(surfaceGroup);
 
-    // Create base sphere
     createBaseSphere();
 
-    // Initialize lil-gui controls
     initializeGUI();
 
-    // Generate initial quadrature points
     console.log('Initializing with default quadrature points');
     await updateQuadraturePoints();
 
-    // Force initial update
     triggerUpdate();
 
-    // Start animation loop
     animate();
 }
 
 function createBaseSphere() {
-    // Remove existing sphere
     if (sphereMesh) {
         sphereGroup.remove(sphereMesh);
     }
 
-    // Create sphere geometry
     sphereGeometry = new THREE.SphereGeometry(sphereRadius, 64, 32);
 
-    // Create material
     sphereMaterial = new THREE.MeshLambertMaterial({
         color: 0xcccccc,
         transparent: true,
@@ -140,46 +113,27 @@ function createBaseSphere() {
         wireframe: wireframe
     });
 
-    // Create mesh
     sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
     sphereGroup.add(sphereMesh);
 }
 
-function updateSphereOpacity() {
-    if (sphereMesh && sphereMaterial) {
-        if (window.sphereOpaque) {
-            sphereMaterial.transparent = false;
-            sphereMaterial.opacity = 1.0;
-        } else {
-            sphereMaterial.transparent = true;
-            sphereMaterial.opacity = 0.3;
-        }
-        sphereMaterial.needsUpdate = true;
-    }
-}
-
 function updateQuadratureVisualization(forceRecreate = false) {
-    // If points exist and we're just updating display properties, try to preserve them
     const existingPointCount = pointGroup.children.length;
     const hasCorrectPointCount = existingPointCount === quadraturePoints.length;
 
-    // Clear and recreate if point count changed, no points exist, or forced
     if (!hasCorrectPointCount || forceRecreate) {
         const reason = forceRecreate ? 'force recreation' : `count mismatch (${existingPointCount} -> ${quadraturePoints.length})`;
         console.log(`🔄 Recreating points: ${reason}`);
-        // Clear existing points
         pointGroup.clear();
 
         if (window.showPoints && quadraturePoints.length > 0) {
-            const pointRadius = (window.pointSize || 6) * 0.01; // Convert to proper Three.js scale
+            const pointRadius = (window.pointSize || 6) * 0.01;
             const pointGeometry = new THREE.SphereGeometry(pointRadius, 8, 6);
             const pointMaterial = new THREE.MeshLambertMaterial({ color: 0x000000 });
 
             quadraturePoints.forEach(point => {
                 const pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
-                // Store original radius for scaling
                 pointMesh.userData.originalRadius = pointRadius;
-                // Ensure point is a Vector3 or has x,y,z properties
                 if (point.x !== undefined) {
                     pointMesh.position.set(point.x, point.y, point.z);
                 } else {
@@ -189,7 +143,6 @@ function updateQuadratureVisualization(forceRecreate = false) {
             });
         }
     } else {
-        // Just update existing points' size and visibility
         console.log('🎨 Updating existing point display properties');
         pointGroup.visible = window.showPoints;
 
@@ -205,30 +158,24 @@ function updateQuadratureVisualization(forceRecreate = false) {
 }
 
 function updateSurfaceVisualization() {
-    // Clear existing surface
     surfaceGroup.clear();
 
-    // Show color map only when sphere display is set to 'colormap'
     if (window.sphereDisplay !== 'colormap') {
-        return; // No color map for wireframe and solid modes
+        return;
     }
-
-    // Show surface visualization for harmonics and function modes
 
     const resolution = 64;
     const geometry = new THREE.SphereGeometry(sphereRadius * 1.005, resolution, resolution / 2);
     const vertices = geometry.attributes.position.array;
     const colors = new Float32Array(vertices.length);
 
-    // Calculate colors based on current mode
     for (let i = 0; i < vertices.length; i += 3) {
         const x = vertices[i];
         const y = vertices[i + 1];
         const z = vertices[i + 2];
 
-        // Convert to spherical coordinates
         const r = Math.sqrt(x * x + y * y + z * z);
-        const phi = Math.acos(Math.max(-1, Math.min(1, z / r))); // Clamp to avoid NaN
+        const phi = Math.acos(Math.max(-1, Math.min(1, z / r)));
         const theta = Math.atan2(y, x);
 
         let colorValue;
@@ -236,40 +183,36 @@ function updateSurfaceVisualization() {
         if (window.currentMode === 'harmonics') {
             try {
                 const ylm = sphericalHarmonic(window.harmonicL, window.harmonicM, theta, phi);
-                // Normalize spherical harmonic to [0,1] range for coloring
-                const maxVal = 1; // Approximate max for visualization
+                const maxVal = 1;
                 colorValue = Math.max(0, Math.min(1, (ylm + maxVal) / (2 * maxVal)));
             } catch (e) {
-                colorValue = 0.5; // Fallback
+                colorValue = 0.5;
             }
         } else if (window.currentMode === 'function') {
             try {
                 const funcValue = evaluateTestFunction(window.currentTestFunction, phi, theta, window.functionParam);
-                // Get function range for proper normalization
                 const range = getFunctionRange(window.currentTestFunction, window.functionParam);
                 colorValue = Math.max(0, Math.min(1, (funcValue - range.min) / (range.max - range.min)));
             } catch (e) {
-                colorValue = 0.5; // Fallback
+                colorValue = 0.5;
             }
         } else {
             colorValue = 0.5;
         }
 
-        // Create a nice color gradient: blue -> green -> red
         if (colorValue < 0.5) {
-            colors[i] = 0;                    // R
-            colors[i + 1] = colorValue * 2;   // G
-            colors[i + 2] = 1;                // B
+            colors[i] = 0;
+            colors[i + 1] = colorValue * 2;
+            colors[i + 2] = 1;
         } else {
-            colors[i] = (colorValue - 0.5) * 2;  // R
-            colors[i + 1] = 1;                   // G
-            colors[i + 2] = 1 - (colorValue - 0.5) * 2; // B
+            colors[i] = (colorValue - 0.5) * 2;
+            colors[i + 1] = 1;
+            colors[i + 2] = 1 - (colorValue - 0.5) * 2;
         }
     }
 
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    // Color map material with opacity from slider
     const material = new THREE.MeshLambertMaterial({
         vertexColors: true,
         transparent: window.sphereOpacity < 1.0,
@@ -284,10 +227,8 @@ function updateSurfaceVisualization() {
 function animate() {
     requestAnimationFrame(animate);
 
-    // Update controls (manual interaction only)
     controls.update();
 
-    // Handle auto-rotation of sphere objects (not camera)
     if (window.autoRotate) {
         const rotationSpeed = window.rotationSpeed * 0.01;
         sphereGroup.rotation.y += rotationSpeed;
@@ -295,13 +236,10 @@ function animate() {
         surfaceGroup.rotation.y += rotationSpeed;
     }
 
-    // Update visualization if needed
     updateVisualizationIfNeeded();
 
-    // Render
     renderer.render(scene, camera);
 
-    // Update info panel only when needed
     updateInfoPanelIfNeeded();
 }
 
@@ -312,18 +250,13 @@ function updateInfoPanelIfNeeded() {
     }
 }
 
-// Helper function to create simple harmonic display name for GUI
 function getSphericalHarmonicDisplayName(l, m) {
-    // Unicode subscript digits: ₀₁₂₃₄₅₆₇₈₉
     const subscriptDigits = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
-    // Unicode superscript digits: ⁰¹²³⁴⁵⁶⁷⁸⁹
     const superscriptDigits = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 
-    // Convert l to subscript
     const lStr = l.toString();
     const subscript = lStr.split('').map(digit => subscriptDigits[parseInt(digit)]).join('');
 
-    // Convert m to superscript (handle negative values)
     const absM = Math.abs(m);
     const mStr = absM.toString();
     const superscript = mStr.split('').map(digit => superscriptDigits[parseInt(digit)]).join('');
@@ -351,18 +284,15 @@ function updateInfoPanel() {
 
     let content = '';
 
-    // System Information Section
     content += `<div class="info-section">`;
     content += `<div class="info-header">📊 System Status</div>`;
 
-    // Mode and quadrature method
     const modeNames = {
         'harmonics': '🌐 Spherical Harmonics',
         'function': '📈 Function Integration'
     };
     content += `<div class="info-row"><span class="info-label">Mode:</span> ${modeNames[window.currentMode] || window.currentMode}</div>`;
 
-    // Quadrature method with more descriptive names
     const quadNames = {
         'monte_carlo_uniform': 'Monte Carlo (Uniform)',
         'monte_carlo_clustered': 'Monte Carlo (Clustered)',
@@ -374,7 +304,6 @@ function updateInfoPanel() {
     };
     content += `<div class="info-row"><span class="info-label">Method:</span> ${quadNames[window.currentQuadMethod] || window.currentQuadMethod}</div>`;
 
-    // Point count with desired vs calculation details
     const desiredPoints = window.numPoints;
 
     const calculationPoints = getEffectiveNumPoints();
@@ -401,7 +330,7 @@ function updateInfoPanel() {
 
     content += `</div>`;
 
-    // Mode-specific information
+
     if (window.currentMode === 'harmonics') {
         content += `<div class="info-section">`;
         content += `<div class="info-header">🌐 Spherical Harmonic</div>`;
@@ -425,7 +354,6 @@ function updateInfoPanel() {
         content += `</div>`;
     }
 
-    // Always compute and display integration results for harmonics and function modes
     const integrationResults = computeIntegrationResults();
     if (integrationResults) {
         content += integrationResults;
@@ -434,10 +362,8 @@ function updateInfoPanel() {
     info.innerHTML = content;
 }
 
-// Separated integration computation for cleaner code
 function computeIntegrationResults() {
     if (quadraturePoints.length === 0) return null;
-    // Compute integration for harmonics and function modes
 
     let content = `<div class="info-section integration-results">`;
     content += `<div class="info-header">🧮 Integration Results</div>`;
@@ -447,7 +373,6 @@ function computeIntegrationResults() {
 
     try {
         if (window.currentMode === 'function') {
-            // Function integration - following Python reference implementation
             let f_mean = 0;
             const N = quadraturePoints.length;
 
@@ -458,45 +383,37 @@ function computeIntegrationResults() {
                 const funcValue = evaluateTestFunction(window.currentTestFunction, phi, theta, window.functionParam);
 
                 if (window.currentQuadMethod === 'monte_carlo_uniform') {
-                    // Python: V = 4π, sum func values, then f_mean * V / (4π)
                     f_mean += funcValue;
                 } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
-                    // Python: V = 2π², sum func * sin(phi), then f_mean * V / (4π)  
                     f_mean += funcValue * Math.sin(phi);
                 } else if (window.currentQuadMethod === 'lebedev') {
-                    // Python: sum w[i] * func, weights already normalized
                     const weight = point.weight !== undefined ? point.weight : (1.0 / N);
                     numericalValue += funcValue * weight;
                 } else if (window.currentQuadMethod === 'product') {
-                    // Product quadrature - assume already normalized
                     const weight = point.weight !== undefined ? point.weight : (1.0 / N);
                     numericalValue += funcValue * weight;
                 } else if (window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym') {
-                    // Python: sum func values, then divide by N
                     f_mean += funcValue;
                 }
             }
 
-            // Apply Monte Carlo and Spherical Design normalization
             if (window.currentQuadMethod === 'monte_carlo_uniform') {
                 f_mean = f_mean / N;
                 const V = 4 * Math.PI;
-                numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean
+                numericalValue = f_mean * V / (4 * Math.PI);
             } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
                 f_mean = f_mean / N;
                 const V = 2 * Math.PI * Math.PI;
-                numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean * π/2
+                numericalValue = f_mean * V / (4 * Math.PI);
             } else if (window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym') {
-                numericalValue = f_mean / N;  // Simple average
+                numericalValue = f_mean / N;
             }
 
-            // Get analytical value and normalize
             analyticalValue = getAnalyticalValue(window.currentTestFunction, window.functionParam);
             if (analyticalValue !== null) {
                 analyticalValue = analyticalValue / (4 * Math.PI);
             }
         } else if (window.currentMode === 'harmonics') {
-            // Spherical harmonic integration - following Python reference implementation
             let f_mean = 0;
             const N = quadraturePoints.length;
 
@@ -521,24 +438,21 @@ function computeIntegrationResults() {
                 }
             }
 
-            // Apply Monte Carlo and Spherical Design normalization
             if (window.currentQuadMethod === 'monte_carlo_uniform') {
                 f_mean = f_mean / N;
                 const V = 4 * Math.PI;
-                numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean
+                numericalValue = f_mean * V / (4 * Math.PI);
             } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
                 f_mean = f_mean / N;
                 const V = 2 * Math.PI * Math.PI;
-                numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean * π/2
+                numericalValue = f_mean * V / (4 * Math.PI);
             } else if (window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym') {
-                numericalValue = f_mean / N;  // Simple average
+                numericalValue = f_mean / N;
             }
 
-            // For spherical harmonics: Y₀⁰ integrates to √(4π), normalized by 4π gives 1/√(4π)
             analyticalValue = (window.harmonicL === 0 && window.harmonicM === 0) ? 1 / (4 * Math.PI) : 0;
         }
 
-        // Display results with proper formatting
         content += `<div class="info-row"><span class="info-label">Numerical:</span> <span class="numerical-value">${numericalValue.toExponential(6)}</span></div>`;
 
         if (analyticalValue !== null) {
@@ -550,7 +464,6 @@ function computeIntegrationResults() {
             content += `<div class="info-row"><span class="info-label">Abs. Error:</span> <span class="error-value ${absoluteError < 1e-6 ? 'good-error' : absoluteError < 1e-3 ? 'moderate-error' : 'poor-error'}">${absoluteError.toExponential(3)}</span></div>`;
             content += `<div class="info-row"><span class="info-label">Rel. Error:</span> <span class="error-value ${relativeError < 1e-6 ? 'good-error' : relativeError < 1e-3 ? 'moderate-error' : 'poor-error'}">${(relativeError * 100).toFixed(4)}%</span></div>`;
 
-            // Add accuracy assessment
             let accuracy = 'Poor';
             let accuracyClass = 'poor-accuracy';
             if (relativeError < 1e-8) {
@@ -582,31 +495,26 @@ let needsInfoPanelUpdate = false;
 async function updateVisualizationIfNeeded() {
     if (needsUpdate) {
         console.log('Updating visualization...');
-        await updateQuadraturePoints(); // Ensure points are generated first
+        await updateQuadraturePoints();
         updateQuadratureVisualization(window.forcePointRecreation || false);
         updateSurfaceVisualization();
         updateSphereAppearance();
-        needsInfoPanelUpdate = true; // Ensure info panel reflects current state
+        needsInfoPanelUpdate = true;
         needsUpdate = false;
-        window.forcePointRecreation = false; // Reset the flag
+        window.forcePointRecreation = false;
         console.log('Visualization update complete');
     }
 }
 
 function updateSphereAppearance() {
     if (sphereMesh) {
-        // Handle sphere visibility and appearance based on display mode
         if (window.sphereDisplay === 'colormap') {
-            // Color map only - hide the sphere
             sphereMesh.visible = false;
         } else {
-            // Show sphere for wireframe and solid modes
             sphereMesh.visible = true;
 
-            // Set wireframe mode
             sphereMesh.material.wireframe = (window.sphereDisplay === 'wireframe');
 
-            // Set opacity from slider
             sphereMesh.material.transparent = window.sphereOpacity < 1.0;
             sphereMesh.material.opacity = window.sphereOpacity;
         }
@@ -667,19 +575,14 @@ async function updateQuadraturePoints() {
 
         if (!points || points.length === 0) {
             console.error(`No points generated for method: ${window.currentQuadMethod}`);
-            points = generateMonteCarloUniform(calculationPoints); // Fallback
+            points = generateMonteCarloUniform(calculationPoints);
         }
 
         quadraturePoints = points;
         console.log(`Generated ${quadraturePoints.length} points using ${window.currentQuadMethod}`);
 
-
-
-        // Don't call triggerUpdate() here as this function is called by updateVisualizationIfNeeded()
-
     } catch (error) {
         console.error(`Error generating quadrature points for ${window.currentQuadMethod}:`, error);
-        // Fallback to Monte Carlo uniform
         const fallbackPoints = getEffectiveNumPoints();
         quadraturePoints = generateMonteCarloUniform(fallbackPoints);
     }
@@ -691,35 +594,27 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// Centralized state management
 const appState = {
-    // Visualization
     mode: 'harmonics',
     quadMethod: 'monte_carlo_uniform',
     numPoints: 100,
 
-    // Spherical Harmonics
     harmonicL: 2,
     harmonicM: 0,
 
-    // Test Functions
     testFunction: 'f1',
     functionParam: 1.0,
 
-    // Display
-    sphereDisplay: 'colormap', // 'wireframe', 'colormap', 'solid'
-    sphereOpacity: 1.0, // 0.0 to 1.0
+    sphereDisplay: 'colormap',
+    sphereOpacity: 1.0,
     showPoints: true,
     pointSize: 6,
 
-    // Animation
     autoRotate: true,
     rotationSpeed: 1.0
 };
 
-// State synchronization functions
 function syncStateToWindow() {
-    // Sync app state to window globals for backward compatibility
     window.currentMode = appState.mode;
     window.currentQuadMethod = appState.quadMethod;
     window.numPoints = appState.numPoints;
@@ -732,7 +627,6 @@ function syncStateToWindow() {
     window.showPoints = appState.showPoints;
     window.pointSize = appState.pointSize;
 
-    // Backward compatibility - derive old properties from new controls
     window.showSphere = appState.sphereDisplay !== 'hidden';
     window.wireframe = appState.sphereDisplay === 'wireframe';
     window.showColorMap = appState.sphereDisplay === 'colormap';
@@ -742,7 +636,6 @@ function syncStateToWindow() {
 }
 
 function syncWindowToState() {
-    // Sync window globals back to app state (for external updates)
     appState.mode = window.currentMode || appState.mode;
     appState.quadMethod = window.currentQuadMethod || appState.quadMethod;
     appState.numPoints = window.numPoints || appState.numPoints;
@@ -758,52 +651,35 @@ function syncWindowToState() {
     appState.rotationSpeed = window.rotationSpeed || appState.rotationSpeed;
 }
 
-// Properties that require quadrature point regeneration
 const QUADRATURE_AFFECTING_PROPERTIES = [
     'mode', 'quadMethod', 'numPoints',
     'harmonicL', 'harmonicM', 'testFunction', 'functionParam'
 ];
 
-// Properties that only affect display/visualization
-const DISPLAY_ONLY_PROPERTIES = [
-    'sphereDisplay', 'sphereOpacity', 'showPoints',
-    'pointSize', 'autoRotate', 'rotationSpeed'
-];
-
-// Properties that affect the info panel content
 const INFO_PANEL_AFFECTING_PROPERTIES = [
     'quadMethod', 'numPoints',
     'mode', 'harmonicL', 'harmonicM', 'testFunction', 'functionParam'
 ];
 
-// State update function with automatic synchronization
 function updateState(updates) {
-    // Store old state for change notification
     const oldState = { ...appState };
 
-    // Validate updates before applying
     const validatedUpdates = validateStateUpdates(updates);
 
-    // Update app state
     Object.assign(appState, validatedUpdates);
 
-    // Sync to window globals
     syncStateToWindow();
 
-    // Update GUI to reflect changes
     if (gui && settings) {
         syncStateToGUI();
     }
 
-    // Notify listeners of state changes
     notifyStateChange(oldState, appState);
 
-    // Determine if quadrature points need regeneration
     const hasQuadraturePropertyChange = Object.keys(validatedUpdates).some(key =>
         QUADRATURE_AFFECTING_PROPERTIES.includes(key)
     );
 
-    // Determine if info panel needs updating
     const hasInfoPanelPropertyChange = Object.keys(validatedUpdates).some(key =>
         INFO_PANEL_AFFECTING_PROPERTIES.includes(key)
     );
@@ -813,7 +689,6 @@ function updateState(updates) {
     }
 
     if (hasQuadraturePropertyChange) {
-        // Smart check: only regenerate if the actual effective points would change
         const oldEffectivePoints = getEffectiveNumPointsFromState(oldState);
         const newEffectivePoints = getEffectiveNumPoints();
         const actuallyNeedsRegeneration =
@@ -828,13 +703,12 @@ function updateState(updates) {
 
         if (actuallyNeedsRegeneration) {
             console.log(`🔄 Effective points changed: ${oldEffectivePoints} → ${newEffectivePoints}, regenerating...`);
-            triggerUpdate(true); // Force point recreation for quadrature changes
+            triggerUpdate(true);
         } else {
             console.log(`🎯 Desired points changed but effective points unchanged (${newEffectivePoints}), skipping regeneration`);
         }
     } else {
         console.log('🎨 Display-only change detected, updating visualization...');
-        // Only update visualization without regenerating points
         updateQuadratureVisualization();
         updateSurfaceVisualization();
         updateSphereAppearance();
@@ -844,17 +718,13 @@ function updateState(updates) {
 function validateStateUpdates(updates) {
     const validated = { ...updates };
 
-    // Validate harmonic constraints
     if ('harmonicL' in validated || 'harmonicM' in validated) {
         const newL = validated.harmonicL !== undefined ? validated.harmonicL : appState.harmonicL;
         const newM = validated.harmonicM !== undefined ? validated.harmonicM : appState.harmonicM;
 
-        // Ensure M <= L
         validated.harmonicM = Math.min(Math.abs(newM), newL);
         validated.harmonicL = Math.max(0, newL);
     }
-
-    // Note: numPoints validation removed - keep UI as-is, use effective value for calculations
 
     if ('functionParam' in validated) {
         validated.functionParam = Math.max(0.1, Math.min(10, validated.functionParam));
@@ -868,34 +738,27 @@ function validateStateUpdates(updates) {
         validated.rotationSpeed = Math.max(0.1, Math.min(3, validated.rotationSpeed));
     }
 
-    // Validate mode - only allow harmonics and function
     if ('mode' in validated) {
         if (validated.mode === 'points') {
             console.warn('Points mode has been removed, defaulting to harmonics');
             validated.mode = 'harmonics';
         } else if (!['harmonics', 'function'].includes(validated.mode)) {
-            validated.mode = 'harmonics'; // Default fallback
+            validated.mode = 'harmonics';
         }
     }
 
     return validated;
 }
 
-// Function for external state updates (keyboard shortcuts, API calls, etc.)
 function setAppState(newState) {
-    // Force a complete state update
     updateState(newState);
-
-    // Mode changes no longer affect GUI visibility
 }
 
-// Get current state (for debugging or external access)
 function getAppState() {
     return { ...appState };
 }
 
 function syncStateToGUI() {
-    // Sync app state to GUI settings object
     if (!settings) {
         console.warn('Settings object not available for state sync');
         return;
@@ -917,7 +780,6 @@ function syncStateToGUI() {
         settings.autoRotate = appState.autoRotate;
         settings.rotationSpeed = appState.rotationSpeed;
 
-        // Update GUI display for all controllers
         if (gui) {
             gui.controllersRecursive().forEach(controller => {
                 try {
@@ -932,14 +794,10 @@ function syncStateToGUI() {
     }
 }
 
-// Initialize state synchronization
-// First sync any existing window globals to state, then sync state to window
 syncWindowToState();
 syncStateToWindow();
 
-// Add keyboard shortcuts for state management
 window.addEventListener('keydown', (event) => {
-    // Ignore if typing in GUI controls
     if (event.target.tagName === 'INPUT') return;
 
     switch (event.key) {
@@ -955,16 +813,13 @@ window.addEventListener('keydown', (event) => {
             break;
         case 'r':
         case 'R':
-            // Reset rotation (would need camera controls access)
             if (controls) {
                 controls.reset();
             }
             break;
-        // Integration now automatic - no manual trigger needed
     }
 });
 
-// Add state change event system
 const stateChangeListeners = [];
 
 function addStateChangeListener(callback) {
@@ -988,7 +843,6 @@ function notifyStateChange(oldState, newState) {
     });
 }
 
-// Initialize the application
 window.addEventListener('load', async () => {
     try {
         await init();
@@ -998,40 +852,29 @@ window.addEventListener('load', async () => {
 });
 window.addEventListener('resize', onWindowResize);
 
-// Export functions for UI controls
-// GUI instance
 let gui;
 
-// Settings object for lil-gui (synchronized with appState)
 const settings = {
-    // Visualization
     mode: appState.mode,
     quadMethod: appState.quadMethod,
     numPoints: appState.numPoints,
     sphericalDesignType: appState.sphericalDesignType,
 
-    // Spherical Harmonics
     harmonicL: appState.harmonicL,
     harmonicM: appState.harmonicM,
 
-    // Test Functions
     testFunction: appState.testFunction,
     functionParam: appState.functionParam,
 
-    // Display
     sphereDisplay: appState.sphereDisplay,
     sphereOpacity: appState.sphereOpacity,
     showPoints: appState.showPoints,
     pointSize: appState.pointSize,
 
-    // Animation
     autoRotate: appState.autoRotate,
     rotationSpeed: appState.rotationSpeed,
-
-    // Actions removed - integration now automatic
 };
 
-// Function to show/hide mode-specific folders
 function updateModeSpecificFolderVisibility(mode) {
     if (window.harmonicsFolder && window.functionsFolder) {
         const showHarmonics = mode === 'harmonics';
@@ -1049,7 +892,6 @@ function initializeGUI() {
     gui = new lilGui({ width: 350 });
     gui.title('3D Spherical Quadrature');
 
-    // Visualization folder
     const vizFolder = gui.addFolder('Visualization');
     vizFolder.add(settings, 'mode', {
         'Spherical Harmonics': 'harmonics',
@@ -1059,7 +901,6 @@ function initializeGUI() {
         updateModeSpecificFolderVisibility(value);
     });
 
-    // Quadrature folder
     const quadFolder = gui.addFolder('Quadrature Method');
     quadFolder.add(settings, 'quadMethod', {
         'Monte Carlo (Uniform)': 'monte_carlo_uniform',
@@ -1077,17 +918,12 @@ function initializeGUI() {
         updateState({ numPoints: value });
     });
 
-    // All folders use default lil-gui visibility behavior
-
-    // Spherical Harmonics folder
     const harmonicsFolder = gui.addFolder('Spherical Harmonics');
     window.harmonicsFolder = harmonicsFolder;
     const lController = harmonicsFolder.add(settings, 'harmonicL', 0, 10, 1).name('ℓ (degree)').onChange(value => {
-        // Ensure M is valid for the new L value
         const newM = Math.min(settings.harmonicM, value);
         updateState({ harmonicL: value, harmonicM: newM });
 
-        // Update controller constraints
         mController.max(value);
         if (newM !== settings.harmonicM) {
             mController.updateDisplay();
@@ -1098,7 +934,6 @@ function initializeGUI() {
         updateState({ harmonicM: value });
     });
 
-    // Test Functions folder
     const functionsFolder = gui.addFolder('Test Functions');
     window.functionsFolder = functionsFolder;
     functionsFolder.add(settings, 'testFunction', {
@@ -1115,7 +950,6 @@ function initializeGUI() {
         updateState({ functionParam: value });
     });
 
-    // Display folder
     const displayFolder = gui.addFolder('Display Options');
 
     displayFolder.add(settings, 'sphereDisplay', {
@@ -1138,7 +972,6 @@ function initializeGUI() {
         updateState({ pointSize: value });
     });
 
-    // Animation folder
     const animationFolder = gui.addFolder('Animation');
     animationFolder.add(settings, 'autoRotate').name('Auto Rotate').onChange(value => {
         updateState({ autoRotate: value });
@@ -1148,11 +981,6 @@ function initializeGUI() {
         updateState({ rotationSpeed: value });
     });
 
-    // Integration folder removed - integration now automatic
-
-    // All folders and controllers remain visible - no dynamic management needed
-
-    // Open all folders by default
     vizFolder.open();
     quadFolder.open();
     displayFolder.open();
@@ -1160,13 +988,9 @@ function initializeGUI() {
     harmonicsFolder.open();
     functionsFolder.open();
 
-    // All GUI controls remain visible by default
-
-    // Ensure GUI reflects the current state
     console.log('Syncing state to GUI...');
     syncStateToGUI();
 
-    // Set initial folder visibility based on current mode
     updateModeSpecificFolderVisibility(settings.mode);
 
     console.log('GUI initialization complete');
@@ -1174,9 +998,7 @@ function initializeGUI() {
 
 
 
-// computeAndDisplayIntegral function removed - integration now automatic in updateInfoPanel
 
-// Export state management functions
 window.updateQuadraturePoints = updateQuadraturePoints;
 window.triggerUpdate = triggerUpdate;
 window.updateState = updateState;

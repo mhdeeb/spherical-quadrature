@@ -1,34 +1,15 @@
 {
-  "name": "spherical-quadrature-3d",
-  "version": "2.0.0",
-  "description": "Interactive 3D spherical quadrature visualization using Three.js",
-  "main": "index.html",
+  "name": "spherical-quadrature",
+  "private": true,
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "start": "python -m http.server 8000",
-    "serve": "npx serve .",
-    "dev": "npx live-server ."
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
-  "keywords": [
-    "spherical-harmonics",
-    "numerical-integration",
-    "quadrature",
-    "visualization",
-    "p5js",
-    "mathematics",
-    "monte-carlo",
-    "lebedev"
-  ],
-  "author": "Based on Python implementation by Casper Beentjes",
-  "license": "MIT",
   "devDependencies": {
-    "live-server": "^1.2.2",
-    "serve": "^14.2.1"
-  },
-  "dependencies": {},
-  "repository": {
-    "type": "git",
-    "url": "p5-quad"
-  },
-  "homepage": "index.html"
+    "typescript": "~5.8.3",
+    "vite": "^7.1.0"
+  }
 }

@@ -8,12 +8,9 @@ import {
     AVAILABLE_FILES
 } from './sphere-quadrature-module.js';
 
-import {
-    testFunctions,
-    analyticalValues
-} from './test-functions.js';
+import testFunctions from './test-functions.js';
 
-import lilGui from './js/lil-gui.js';
+import lilGui from '../lib/lil-gui.js';
 
 // Configuration
 const config = {
