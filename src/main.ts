@@ -1,6 +1,6 @@
-import * as THREE from '../lib/three.module.min.js';
-import { OrbitControls } from '../lib/OrbitControls.js';
-import lilGui from '../lib/lil-gui.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import lilGui from 'lil-gui';
 
 import {
     generateMonteCarloUniform,

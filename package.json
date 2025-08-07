@@ -11,5 +11,12 @@
   "devDependencies": {
     "typescript": "~5.8.3",
     "vite": "^7.1.0"
+  },
+  "dependencies": {
+    "@types/plotly.js-dist-min": "^2.3.4",
+    "@types/three": "^0.179.0",
+    "lil-gui": "^0.20.0",
+    "plotly.js-dist-min": "^3.0.3",
+    "three": "^0.179.1"
   }
 }

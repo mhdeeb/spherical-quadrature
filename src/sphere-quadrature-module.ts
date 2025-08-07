@@ -1,6 +1,6 @@
 import { SPHERE_RADIUS, AVAILABLE_POINTS } from './constants.js';
 
-const pointCache = {
+const pointCache: { [key: string]: { [key: number]: Point[] } } = {
     "lebedev": {},
     "HardinSloane": {},
     "WomersleySym": {},
@@ -8,14 +8,14 @@ const pointCache = {
 };
 
 class Point {
-    x = null;
-    y = null;
-    z = null;
-    phi = null;
-    theta = null;
-    weight = null;
+    x: number | null = null;
+    y: number | null = null;
+    z: number | null = null;
+    phi: number | null = null;
+    theta: number | null = null;
+    weight: number | null = null;
 
-    constructor(phi, theta, weight) {
+    constructor(phi: number, theta: number, weight: number) {
         this.phi = phi;
         this.theta = theta;
         this.weight = weight;
@@ -24,13 +24,13 @@ class Point {
     }
 
     calculateCartesian(r = SPHERE_RADIUS) {
-        this.x = r * Math.sin(this.phi) * Math.cos(this.theta);
-        this.y = r * Math.sin(this.phi) * Math.sin(this.theta);
-        this.z = r * Math.cos(this.phi);
+        this.x = r * Math.sin(this.phi!) * Math.cos(this.theta!);
+        this.y = r * Math.sin(this.phi!) * Math.sin(this.theta!);
+        this.z = r * Math.cos(this.phi!);
     }
 }
 
-function gaussLegendrePoints(degree) {
+function gaussLegendrePoints(degree: number) {
     if (degree <= 0) {
         throw new Error("Degree must be a positive integer.");
     }
@@ -85,7 +85,7 @@ function gaussLegendrePoints(degree) {
     };
 }
 
-const gaussLegendre = (fn, a, b, n, ...args) => {
+const gaussLegendre = (fn: (x: number, ...args: any[]) => number, a: number, b: number, n: number, ...args: any[]) => {
     let { x: x_sample, w: weights } = gaussLegendrePoints(n);
 
     x_sample = x_sample.map(x => (b - a) * x / 2 + (a + b) / 2);
@@ -100,7 +100,7 @@ const gaussLegendre = (fn, a, b, n, ...args) => {
     return I;
 }
 
-function trapezoidal(fn, a, b, n, ...args) {
+function trapezoidal(fn: (x: number, ...args: any[]) => number, a: number, b: number, n: number, ...args: any[]) {
     let h = (b - a) / n;
     let s = fn(a, ...args) + fn(b, ...args);
     for (let i = 1; i < n; i++)
@@ -108,9 +108,9 @@ function trapezoidal(fn, a, b, n, ...args) {
     return (h / 2) * s;
 }
 
-function prod_quad(func, N = 20, M = 40, ...args) {
+function prod_quad(func: (theta: number, phi: number, ...args: any[]) => number, N = 20, M = 40, ...args: any[]) {
     let I = trapezoidal(
-        theta => gaussLegendre((phi, ...args) => func(phi, ...args) * Math.sin(phi), 0, Math.PI, N, theta, ...args),
+        theta => gaussLegendre((phi: number, ...args: any[]) => func(phi, ...args) * Math.sin(phi), 0, Math.PI, N, theta, ...args),
         0,
         2 * Math.PI,
         M,
@@ -119,7 +119,7 @@ function prod_quad(func, N = 20, M = 40, ...args) {
     return I / (4 * Math.PI);
 }
 
-function generateMonteCarloUniform(N) {
+function generateMonteCarloUniform(N: number) {
     let points = [];
 
     for (let i = 0; i < N; i++) {
@@ -139,7 +139,7 @@ function generateMonteCarloUniform(N) {
     return points;
 }
 
-function generateMonteCarloClustered(N) {
+function generateMonteCarloClustered(N: number) {
     let points = [];
 
     for (let i = 0; i < N; i++) {
@@ -159,8 +159,8 @@ function generateMonteCarloClustered(N) {
     return points;
 }
 
-async function generateLebedevPoints(N) {
-    let pointSize = Object.keys(AVAILABLE_POINTS["lebedev"]).reduce((prev, curr) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
+async function generateLebedevPoints(N: number) {
+    let pointSize = Object.keys(AVAILABLE_POINTS["lebedev"]).reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
 
     if (pointCache["lebedev"][pointSize]) {
         return pointCache["lebedev"][pointSize];
@@ -197,13 +197,13 @@ async function generateLebedevPoints(N) {
 
         return points;
 
-    } catch (error) {
+    } catch (error: any) {
         console.warn(`Could not load Lebedev data for N = ${pointSize}: ${error.message}`);
         return null;
     }
 }
 
-function generateProductQuadrature(N) {
+function generateProductQuadrature(N: number) {
     let points = [];
 
     N = Math.round(Math.sqrt(N / 2));
@@ -224,8 +224,8 @@ function generateProductQuadrature(N) {
     return points;
 }
 
-async function generateSphericalDesign(N, designType = 'HardinSloane') {
-    let pointSize = Object.keys(AVAILABLE_POINTS[designType]).reduce((prev, curr) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
+async function generateSphericalDesign(N: number, designType = 'HardinSloane') {
+    let pointSize = Object.keys(AVAILABLE_POINTS[designType]).reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
 
     if (pointCache[designType][pointSize]) {
         return pointCache[designType][pointSize];
@@ -271,7 +271,7 @@ async function generateSphericalDesign(N, designType = 'HardinSloane') {
         console.log(`Loaded ${designType} with ${points.length} points`);
         return points;
 
-    } catch (error) {
+    } catch (error: any) {
         console.warn(`Could not load ${designType} data for N = ${pointSize}: ${error.message}`);
         return null;
     }
