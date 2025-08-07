@@ -119,7 +119,6 @@ function prod_quad(func, N = 20, M = 40, ...args) {
     return I / (4 * Math.PI);
 }
 
-// Monte Carlo - Uniform distribution on sphere
 function generateMonteCarloUniform(N) {
     let points = [];
 
@@ -140,7 +139,6 @@ function generateMonteCarloUniform(N) {
     return points;
 }
 
-// Monte Carlo - Clustered distribution (incorrect but educational)
 function generateMonteCarloClustered(N) {
     let points = [];
 
@@ -205,7 +203,6 @@ async function generateLebedevPoints(N) {
     }
 }
 
-// Product quadrature (Gauss-Legendre × Trapezoidal)
 function generateProductQuadrature(N) {
     let points = [];
 

@@ -12,9 +12,7 @@ import {
     generateSphericalDesign,
 } from './sphere-quadrature-module.js';
 
-// Import other functions as needed
-import { sphericalHarmonic } from './spherical-harmonics.js';
-import { evaluateTestFunction, getAnalyticalValue, getFunctionRange } from './test-functions.js';
+import testFunctions from './test-functions.js';
 
 // Three.js core objects
 let scene, camera, renderer, controls;
