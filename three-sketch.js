@@ -7,11 +7,9 @@ import lilGui from './js/lil-gui.js';
 import {
     generateMonteCarloUniform,
     generateMonteCarloClustered,
-    generateLebedevPoints,
     generateProductQuadrature,
+    generateLebedevPoints,
     generateSphericalDesign,
-    SPHERICAL_DESIGN_TYPES,
-    getClosestSphericalDesign
 } from './sphere-quadrature-module.js';
 
 // Import other functions as needed
@@ -31,7 +29,6 @@ let sphereGeometry, sphereMaterial, sphereMesh;
 window.currentMode = 'harmonics';
 window.currentQuadMethod = 'monte_carlo_uniform';
 window.numPoints = 100;
-window.sphericalDesignType = 'HardinSloane';
 window.harmonicL = 2;
 window.harmonicM = 0;
 window.currentTestFunction = 'f1';
@@ -337,38 +334,18 @@ function getSphericalHarmonicDisplayName(l, m) {
     return `Y${subscript}${finalSuperscript}`;
 }
 
-// Helper function to create formatted spherical harmonic names
-function getSphericalHarmonicName(l, m) {
-    // Format the superscript for negative values
-    const superscript = m >= 0 ? m : `−${Math.abs(m)}`;
+function getEffectiveNumPointsFromState(state) {
+    const desired = state.numPoints || 100;
+    const minPoints = Math.max(1, desired);
+    const naxPoints = Math.min(10000, minPoints);
 
-    // Create the main Y notation
-    const yNotation = `Y<sub>${l}</sub><sup>${superscript}</sup>(θ,φ)`;
-
-    // Add descriptive names for common harmonics
-    const descriptions = {
-        '0,0': 'constant',
-        '1,-1': 'y-component',
-        '1,0': 'z-component',
-        '1,1': 'x-component',
-        '2,-2': 'xy-plane rotation',
-        '2,-1': 'yz-plane',
-        '2,0': 'prolate (3z²−r²)',
-        '2,1': 'xz-plane',
-        '2,2': 'oblate (x²−y²)',
-        '3,0': 'z(5z²−3r²)',
-        '4,0': '35z⁴−30z²r²+3r⁴'
-    };
-
-    const key = `${l},${m}`;
-    const description = descriptions[key];
-
-    if (description) {
-        return `${yNotation} <span class="info-detail">(${description})</span>`;
-    }
-
-    return yNotation;
+    return naxPoints;
 }
+
+function getEffectiveNumPoints() {
+    return getEffectiveNumPointsFromState(appState);
+}
+
 
 function updateInfoPanel() {
     const info = document.getElementById('dynamicInfo');
@@ -393,12 +370,15 @@ function updateInfoPanel() {
         'monte_carlo_clustered': 'Monte Carlo (Clustered)',
         'lebedev': 'Lebedev Quadrature',
         'product': 'Product Quadrature',
-        'spherical_design': 'Spherical Design'
+        'HardinSloane': 'HardinSloane',
+        'WomersleySym': 'WomersleySym',
+        'WomersleyNonSym': 'WomersleyNonSym'
     };
     content += `<div class="info-row"><span class="info-label">Method:</span> ${quadNames[window.currentQuadMethod] || window.currentQuadMethod}</div>`;
 
     // Point count with desired vs calculation details
     const desiredPoints = window.numPoints;
+
     const calculationPoints = getEffectiveNumPoints();
     const actualPoints = quadraturePoints.length;
     const hasAdjustment = calculationPoints !== desiredPoints;
@@ -408,22 +388,19 @@ function updateInfoPanel() {
 
     if (hasAdjustment) {
         const reason = window.currentQuadMethod === 'lebedev' ? 'closest Lebedev order' :
-            window.currentQuadMethod === 'spherical_design' ? 'closest available design' :
+            window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym' ? 'closest available design' :
                 'valid range';
         content += `<div class="info-row"><span class="info-label">Calculation:</span> ${calculationPoints} <span class="info-detail">(${reason})</span></div>`;
     }
 
     if (hasFinalDifference || hasAdjustment) {
         const suffix = window.currentQuadMethod === 'lebedev' ? ' (Lebedev order)' :
-            window.currentQuadMethod === 'spherical_design' ? ' (design points)' : '';
+            window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym' ? ' (design points)' : '';
         content += `<div class="info-row"><span class="info-label">Actual:</span> ${actualPoints}${suffix}</div>`;
     } else if (!hasAdjustment) {
         content += `<div class="info-row"><span class="info-label">Points:</span> ${actualPoints}</div>`;
     }
 
-    if (window.currentQuadMethod === 'spherical_design') {
-        content += `<div class="info-row"><span class="info-label">Design Type:</span> ${window.sphericalDesignType}</div>`;
-    }
     content += `</div>`;
 
     // Mode-specific information
@@ -496,7 +473,7 @@ function computeIntegrationResults() {
                     // Product quadrature - assume already normalized
                     const weight = point.weight !== undefined ? point.weight : (1.0 / N);
                     numericalValue += funcValue * weight;
-                } else if (window.currentQuadMethod === 'spherical_design') {
+                } else if (window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym') {
                     // Python: sum func values, then divide by N
                     f_mean += funcValue;
                 }
@@ -511,7 +488,7 @@ function computeIntegrationResults() {
                 f_mean = f_mean / N;
                 const V = 2 * Math.PI * Math.PI;
                 numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean * π/2
-            } else if (window.currentQuadMethod === 'spherical_design') {
+            } else if (window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym') {
                 numericalValue = f_mean / N;  // Simple average
             }
 
@@ -541,7 +518,7 @@ function computeIntegrationResults() {
                 } else if (window.currentQuadMethod === 'product') {
                     const weight = point.weight !== undefined ? point.weight : (1.0 / N);
                     numericalValue += ylm * weight;
-                } else if (window.currentQuadMethod === 'spherical_design') {
+                } else if (window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym') {
                     f_mean += ylm;
                 }
             }
@@ -555,7 +532,7 @@ function computeIntegrationResults() {
                 f_mean = f_mean / N;
                 const V = 2 * Math.PI * Math.PI;
                 numericalValue = f_mean * V / (4 * Math.PI);  // = f_mean * π/2
-            } else if (window.currentQuadMethod === 'spherical_design') {
+            } else if (window.currentQuadMethod === 'HardinSloane' || window.currentQuadMethod === 'WomersleySym' || window.currentQuadMethod === 'WomersleyNonSym') {
                 numericalValue = f_mean / N;  // Simple average
             }
 
@@ -680,8 +657,10 @@ async function updateQuadraturePoints() {
             case 'product':
                 points = generateProductQuadrature(calculationPoints);
                 break;
-            case 'spherical_design':
-                points = generateSphericalDesign(calculationPoints, window.sphericalDesignType);
+            case 'HardinSloane':
+            case 'WomersleySym':
+            case 'WomersleyNonSym':
+                points = await generateSphericalDesign(calculationPoints, window.currentQuadMethod);
                 break;
             default:
                 console.warn(`Unknown quadrature method: ${window.currentQuadMethod}, using Monte Carlo uniform`);
@@ -720,7 +699,6 @@ const appState = {
     mode: 'harmonics',
     quadMethod: 'monte_carlo_uniform',
     numPoints: 100,
-    sphericalDesignType: 'HardinSloane',
 
     // Spherical Harmonics
     harmonicL: 2,
@@ -747,7 +725,6 @@ function syncStateToWindow() {
     window.currentMode = appState.mode;
     window.currentQuadMethod = appState.quadMethod;
     window.numPoints = appState.numPoints;
-    window.sphericalDesignType = appState.sphericalDesignType;
     window.harmonicL = appState.harmonicL;
     window.harmonicM = appState.harmonicM;
     window.currentTestFunction = appState.testFunction;
@@ -771,7 +748,6 @@ function syncWindowToState() {
     appState.mode = window.currentMode || appState.mode;
     appState.quadMethod = window.currentQuadMethod || appState.quadMethod;
     appState.numPoints = window.numPoints || appState.numPoints;
-    appState.sphericalDesignType = window.sphericalDesignType || appState.sphericalDesignType;
     appState.harmonicL = window.harmonicL || appState.harmonicL;
     appState.harmonicM = window.harmonicM || appState.harmonicM;
     appState.testFunction = window.currentTestFunction || appState.testFunction;
@@ -786,7 +762,7 @@ function syncWindowToState() {
 
 // Properties that require quadrature point regeneration
 const QUADRATURE_AFFECTING_PROPERTIES = [
-    'mode', 'quadMethod', 'numPoints', 'sphericalDesignType',
+    'mode', 'quadMethod', 'numPoints',
     'harmonicL', 'harmonicM', 'testFunction', 'functionParam'
 ];
 
@@ -798,7 +774,7 @@ const DISPLAY_ONLY_PROPERTIES = [
 
 // Properties that affect the info panel content
 const INFO_PANEL_AFFECTING_PROPERTIES = [
-    'quadMethod', 'sphericalDesignType', 'numPoints',
+    'quadMethod', 'numPoints',
     'mode', 'harmonicL', 'harmonicM', 'testFunction', 'functionParam'
 ];
 
@@ -840,7 +816,7 @@ function updateState(updates) {
 
     if (hasQuadraturePropertyChange) {
         // Smart check: only regenerate if the actual effective points would change
-        const oldEffectivePoints = getEffectiveNumPointsForState(oldState);
+        const oldEffectivePoints = getEffectiveNumPointsFromState(oldState);
         const newEffectivePoints = getEffectiveNumPoints();
         const actuallyNeedsRegeneration =
             oldEffectivePoints !== newEffectivePoints ||
@@ -905,66 +881,6 @@ function validateStateUpdates(updates) {
     }
 
     return validated;
-}
-
-// Get effective number of points for calculations using current state
-function getEffectiveNumPoints() {
-    return getEffectiveNumPointsForState(appState);
-}
-
-// Get effective number of points for calculations for any given state
-function getEffectiveNumPointsForState(state) {
-    const desired = state.numPoints || 100;
-    const method = state.quadMethod || 'monte_carlo_uniform';
-    const designType = state.sphericalDesignType || 'HardinSloane';
-
-    // Handle minimum boundary (0 becomes 1 for practical reasons)
-    const minPoints = Math.max(1, desired);
-
-    // Handle maximum boundary  
-    const maxPoints = Math.min(10000, minPoints);
-
-    // Algorithm-specific constraints
-    switch (method) {
-        case 'lebedev':
-            // Lebedev has fixed orders - find closest available
-            // return getClosestLebedevOrderPoints(maxPoints);
-
-        case 'spherical_design':
-            // Spherical designs have specific available points - find closest
-            return getClosestSphericalDesignPoints(maxPoints, designType);
-
-        case 'monte_carlo_uniform':
-        case 'monte_carlo_clustered':
-        case 'product':
-        default:
-            // These methods can generate any number of points
-            return maxPoints;
-    }
-}
-
-// Find closest available spherical design points to desired number (wrapper)
-function getClosestSphericalDesignPoints(desired, designType) {
-    const result = getClosestSphericalDesign(designType, desired);
-    return result ? result.points : desired;
-}
-
-// Helper function to find closest value in an array
-function getClosestFromArray(target, array) {
-    if (array.length === 0) return target;
-
-    let closest = array[0];
-    let minDiff = Math.abs(target - closest);
-
-    for (const value of array) {
-        const diff = Math.abs(target - value);
-        if (diff < minDiff) {
-            minDiff = diff;
-            closest = value;
-        }
-    }
-
-    return closest;
 }
 
 // Function for external state updates (keyboard shortcuts, API calls, etc.)
@@ -1033,9 +949,6 @@ window.addEventListener('keydown', (event) => {
             setAppState({ mode: 'harmonics' });
             break;
         case '2':
-            setAppState({ mode: 'points' });
-            break;
-        case '3':
             setAppState({ mode: 'function' });
             break;
         case ' ':
@@ -1120,15 +1033,6 @@ const settings = {
     // Actions removed - integration now automatic
 };
 
-// Function to show/hide spherical design type control
-function updateSphericalDesignVisibility(quadMethod) {
-    if (window.sphericalDesignController) {
-        const shouldShow = quadMethod === 'spherical_design';
-        window.sphericalDesignController.domElement.style.display = shouldShow ? 'flex' : 'none';
-        console.log(`Spherical design control: ${shouldShow ? 'shown' : 'hidden'}`);
-    }
-}
-
 // Function to show/hide mode-specific folders
 function updateModeSpecificFolderVisibility(mode) {
     if (window.harmonicsFolder && window.functionsFolder) {
@@ -1164,53 +1068,16 @@ function initializeGUI() {
         'Monte Carlo (Clustered)': 'monte_carlo_clustered',
         'Lebedev': 'lebedev',
         'Product Quadrature': 'product',
-        'Spherical Design': 'spherical_design'
+        'HardinSloane': 'HardinSloane',
+        'WomersleySym': 'WomersleySym',
+        'WomersleyNonSym': 'WomersleyNonSym'
     }).name('Method').onChange(value => {
         updateState({ quadMethod: value });
-        updateSphericalDesignVisibility(value);
     });
 
     quadFolder.add(settings, 'numPoints', 0, 10000, 1).name('Points').onChange(value => {
         updateState({ numPoints: value });
     });
-
-    // Spherical Design Type (conditional visibility)
-    let sphericalDesignController;
-    try {
-        const sphericalDesignOptions = {};
-        if (SPHERICAL_DESIGN_TYPES && typeof SPHERICAL_DESIGN_TYPES === 'object') {
-            Object.keys(SPHERICAL_DESIGN_TYPES).forEach(key => {
-                sphericalDesignOptions[SPHERICAL_DESIGN_TYPES[key].description] = key;
-            });
-        } else {
-            // Fallback options if SPHERICAL_DESIGN_TYPES is not available
-            sphericalDesignOptions['HardinSloane'] = 'HardinSloane';
-            sphericalDesignOptions['WomersleySym'] = 'WomersleySym';
-            sphericalDesignOptions['WomersleyNonSym'] = 'WomersleyNonSym';
-        }
-
-        sphericalDesignController = quadFolder.add(settings, 'sphericalDesignType', sphericalDesignOptions).name('Design Type').onChange(value => {
-            updateState({ sphericalDesignType: value });
-        });
-
-        // Store globally for visibility control
-        window.sphericalDesignController = sphericalDesignController;
-    } catch (error) {
-        console.error('Error creating spherical design controls:', error);
-        // Create a fallback controller
-        sphericalDesignController = quadFolder.add(settings, 'sphericalDesignType', {
-            'HardinSloane': 'HardinSloane',
-            'WomersleySym': 'WomersleySym',
-            'WomersleyNonSym': 'WomersleyNonSym'
-        }).name('Design Type').onChange(value => {
-            updateState({ sphericalDesignType: value });
-        });
-        // Store globally for visibility control
-        window.sphericalDesignController = sphericalDesignController;
-    }
-
-    // Set initial visibility based on current quadrature method
-    updateSphericalDesignVisibility(settings.quadMethod);
 
     // All folders use default lil-gui visibility behavior
 
