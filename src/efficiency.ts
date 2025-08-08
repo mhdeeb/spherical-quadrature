@@ -41,24 +41,18 @@ const config = {
 let gui;
 
 // Data storage
-let analysisData = {
+type AnalysisSeries = { degrees: number[]; points: number[]; efficiencies: number[]; errors: number[] };
+let analysisData: { lebedev: AnalysisSeries; sphericalDesign: AnalysisSeries; product: AnalysisSeries; monteCarlo: AnalysisSeries } = {
     lebedev: { degrees: [], points: [], efficiencies: [], errors: [] },
     sphericalDesign: { degrees: [], points: [], efficiencies: [], errors: [] },
     product: { degrees: [], points: [], efficiencies: [], errors: [] },
     monteCarlo: { degrees: [], points: [], efficiencies: [], errors: [] }
 };
 
-// Test function descriptions
-const functionDescriptions = {
-    'f1': 'Polynomial: 1 + x + y² + x²y + x⁴ + y⁵ + x²y²z²',
-    'f2': 'Franke Function: Multi-modal exponential peaks',
-    'f3': 'Hyperbolic Tangent: tanh(-a(x+y-z))/a',
-    'f4': 'Sign Function: step function discontinuity',
-    'f5': 'Modified Sign Function: πx + y discontinuity'
-};
+// (Descriptions intentionally omitted)
 
 // Color scheme
-const colors = {
+const colors: Record<string, string> = {
     lebedev: '#e74c3c',
     sphericalDesign: '#2c3e50',
     product: '#3498db',
@@ -67,11 +61,14 @@ const colors = {
 };
 
 // Helper function to get spherical design by degree
-function getSphericalDesignByDegree(designType, degree) {
+async function getSphericalDesignByDegree(
+    designType: SphericalDesignType,
+    degree: number
+): Promise<QuadPoint[] | null> {
     const availableForType = AVAILABLE_FILES[designType];
-    if (availableForType && availableForType[degree]) {
-        const pointCount = availableForType[degree];
-        return generateSphericalDesign(pointCount, designType);
+    const pointCount = availableForType?.[degree];
+    if (pointCount) {
+        return await generateSphericalDesign(pointCount, designType) as unknown as QuadPoint[];
     }
     return null;
 }
@@ -96,7 +93,8 @@ async function init() {
         console.log('✅ Efficiency Analysis initialized successfully');
     } catch (error) {
         console.error('❌ Failed to initialize:', error);
-        showError('Failed to initialize efficiency analysis: ' + error.message);
+        const message = (error instanceof Error) ? error.message : String(error);
+        showError('Failed to initialize efficiency analysis: ' + message);
     }
 }
 
@@ -145,15 +143,18 @@ function initializeGUI() {
     const testFunctionFolder = gui.addFolder('🔬 Test Function Settings');
     testFunctionFolder.open();
 
-    const testFunctionNames = {
-        'f1': 'f₁ - Polynomial',
-        'f2': 'f₂ - Franke Function',
-        'f3': 'f₃ - Hyperbolic Tangent',
-        'f4': 'f₄ - Sign Function',
-        'f5': 'f₅ - Modified Sign Function'
+    // Build function options dynamically from testFunctions
+    const toSubscript = (num: number) => {
+        const sub = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
+        return String(num).split('').map(d => sub[parseInt(d, 10)]).join('');
     };
+    const testFunctionOptions: Record<string, string> = {};
+    testFunctions.forEach((tf: any, idx: number) => {
+        const label = `f${toSubscript(idx + 1)} - ${tf.name}`;
+        testFunctionOptions[label] = tf.value;
+    });
 
-    testFunctionFolder.add(config, 'testFunction', testFunctionNames)
+    testFunctionFolder.add(config, 'testFunction', testFunctionOptions)
         .name('Test Function')
         .onChange(async () => {
             await calculateErrorData();
@@ -171,21 +172,7 @@ function initializeGUI() {
 
 
 
-    // Quadrature Methods Folder
-    const methodsFolder = gui.addFolder('⚙️ Quadrature Methods');
-    methodsFolder.open();
-
-    methodsFolder.add(config, 'sphericalDesignType', {
-        'Womersley Non-Symmetric': 'WomersleyNonSym',
-        'Womersley Symmetric': 'WomersleySym',
-        'Hardin-Sloane': 'HardinSloane'
-    })
-        .name('Spherical Design Type')
-        .onChange(async () => {
-            await loadAnalysisData();
-            updatePlots();
-            updateStats();
-        });
+    // Quadrature Methods folder removed (kept default config.sphericalDesignType)
 
     // Visualization Settings Folder
     const vizFolder = gui.addFolder('📈 Visualization');
@@ -221,11 +208,12 @@ async function loadAnalysisData() {
 
     try {
         // Clear existing data
-        for (let method in analysisData) {
-            for (let key in analysisData[method]) {
-                analysisData[method][key] = [];
-            }
-        }
+        analysisData = {
+            lebedev: { degrees: [], points: [], efficiencies: [], errors: [] },
+            sphericalDesign: { degrees: [], points: [], efficiencies: [], errors: [] },
+            product: { degrees: [], points: [], efficiencies: [], errors: [] },
+            monteCarlo: { degrees: [], points: [], efficiencies: [], errors: [] }
+        };
 
         // Calculate both efficiency and error data for all methods
         await calculateEfficiencyData();
@@ -265,7 +253,7 @@ async function calculateEfficiencyData() {
     for (let order of lebedevOrders) {
         if (order > 131) break; // Limit for visualization
 
-        const points = await generateLebedevPoints(order); // Get points for this specific order
+        const points = await generateLebedevPoints(order, 'order'); // Select by order
 
         // Skip if data couldn't be loaded (no approximations)
         if (!points || points.length === 0) {
@@ -277,13 +265,10 @@ async function calculateEfficiencyData() {
 
         if (actualPoints > config.maxPoints) break;
 
-        // For Lebedev, the polynomial degree should be 2*order - 1 (theoretical)
-        // But Python uses the order directly as degree, so let's test both
-        const degreeFromOrder = order;  // What Python does
-        const theoreticalDegree = 2 * order - 1;  // What Lebedev theory says
+        // For Lebedev, Python uses the order directly as degree
+        const degreeFromOrder = order;
 
         const efficiencyPython = Math.pow(degreeFromOrder + 1, 2) / (3.0 * actualPoints);
-        const efficiencyTheoretical = Math.pow(theoreticalDegree + 1, 2) / (3.0 * actualPoints);
 
         // Use the Python approach (order as degree)
         const efficiency = efficiencyPython;
@@ -307,10 +292,9 @@ async function calculateEfficiencyData() {
         config.sphericalDesignType === 'WomersleySym' ? 2 : 1) {
 
         try {
-            const points = getSphericalDesignByDegree(config.sphericalDesignType, degree);
-            if (!points) continue; // Skip unavailable degrees
-
-            const actualPoints = points.length;
+            const availableForType = AVAILABLE_FILES[config.sphericalDesignType as SphericalDesignType];
+            const actualPoints = availableForType?.[degree];
+            if (!actualPoints) continue; // Skip unavailable degrees
 
             if (actualPoints > config.maxPoints) continue;
 
@@ -368,6 +352,11 @@ async function calculateErrorData() {
     analysisData.sphericalDesign.errors = [];
     analysisData.product.errors = [];
     analysisData.monteCarlo.errors = [];
+    // Reset x-axes for error plots to ensure alignment with errors we push below
+    analysisData.lebedev.points = [];
+    analysisData.sphericalDesign.points = [];
+    analysisData.product.points = [];
+    analysisData.monteCarlo.points = [];
 
     // Handle both key format (f1, f2, etc.) and display format (f₁ - Polynomial, etc.)
     let functionKey = config.testFunction;
@@ -377,10 +366,11 @@ async function calculateErrorData() {
         functionKey = functionKey.split(' - ')[0].replace('₁', '1').replace('₂', '2').replace('₃', '3').replace('₄', '4').replace('₅', '5');
     }
 
-    const testFunc = testFunctions[functionKey];
-    const exactValue = getExactValue(functionKey, config.functionParam);
+    const testFunctionMap: Record<string, any> = Object.fromEntries(testFunctions.map((t: any) => [t.value, t]));
+    const testEntry = testFunctionMap[functionKey];
+    const exactValue = getExactValue(functionKey, config.functionParam, testFunctionMap);
 
-    if (!testFunc || exactValue === undefined) {
+    if (!testEntry || exactValue === undefined) {
         throw new Error(`Invalid test function: ${config.testFunction} (parsed as: ${functionKey})`);
     }
 
@@ -403,9 +393,9 @@ async function calculateErrorData() {
 
             if (actualPoints > config.maxPoints) break;
 
-            const numericalValue = computeLebedevIntegral(points, testFunc, config.functionParam);
+            const numericalValue = computeLebedevIntegral(points, testEntry, config.functionParam);
             const error = Math.abs(exactValue - numericalValue);
-
+            analysisData.lebedev.points.push(actualPoints);
             analysisData.lebedev.errors.push(error);
         } catch (error) {
             console.warn(`Error calculating Lebedev integration for order ${order}:`, error);
@@ -421,16 +411,16 @@ async function calculateErrorData() {
         config.sphericalDesignType === 'WomersleySym' ? 2 : 1) {
 
         try {
-            const points = getSphericalDesignByDegree(config.sphericalDesignType, degree);
+            const points = await getSphericalDesignByDegree(config.sphericalDesignType as SphericalDesignType, degree);
             if (!points) continue; // Skip unavailable degrees
 
             const actualPoints = points.length;
 
             if (actualPoints > config.maxPoints) continue;
 
-            const numericalValue = computeSphericalDesignIntegral(points, testFunc, config.functionParam);
+            const numericalValue = computeSphericalDesignIntegral(points, testEntry, config.functionParam);
             const error = Math.abs(exactValue - numericalValue);
-
+            analysisData.sphericalDesign.points.push(actualPoints);
             analysisData.sphericalDesign.errors.push(error);
         } catch (error) {
             continue;
@@ -445,13 +435,14 @@ async function calculateErrorData() {
 
         // Uniform Monte Carlo
         const uniformPoints = generateMonteCarloUniform(numPoints);
-        const uniformValue = computeMonteCarloIntegral(uniformPoints, testFunc, config.functionParam, 'uniform');
+        const uniformValue = computeMonteCarloIntegral(uniformPoints, testEntry, config.functionParam, 'uniform');
         const uniformError = Math.abs(exactValue - uniformValue);
+        analysisData.monteCarlo.points.push(numPoints);
 
         // Clustered Monte Carlo
+        // Also compute clustered for reference (not plotted)
         const clusteredPoints = generateMonteCarloClustered(numPoints);
-        const clusteredValue = computeMonteCarloIntegral(clusteredPoints, testFunc, config.functionParam, 'clustered');
-        const clusteredError = Math.abs(exactValue - clusteredValue);
+        void computeMonteCarloIntegral(clusteredPoints, testEntry, config.functionParam, 'clustered');
 
         // Store both errors (we'll average them or show both in plot)
         analysisData.monteCarlo.errors.push(uniformError);
@@ -466,59 +457,75 @@ async function calculateErrorData() {
         // Test both point configurations
         if (points1 <= config.maxPoints) {
             const productPoints1 = generateGaussianProduct(m, 2 * m);
-            const productValue1 = computeGaussianProductIntegral(productPoints1, testFunc, config.functionParam);
+            const productValue1 = computeGaussianProductIntegral(productPoints1, testEntry, config.functionParam);
             const productError1 = Math.abs(exactValue - productValue1);
+            analysisData.product.points.push(points1);
             analysisData.product.errors.push(productError1);
         }
 
         if (points2 <= config.maxPoints) {
             const productPoints2 = generateGaussianProduct(m, 2 * m + 1);
-            const productValue2 = computeGaussianProductIntegral(productPoints2, testFunc, config.functionParam);
+            const productValue2 = computeGaussianProductIntegral(productPoints2, testEntry, config.functionParam);
             const productError2 = Math.abs(exactValue - productValue2);
+            analysisData.product.points.push(points2);
             analysisData.product.errors.push(productError2);
         }
     }
 }
 
 // Get exact analytical value for test function
-function getExactValue(functionName, param) {
-    const analyticalFunc = analyticalValues[functionName];
-
-    if (typeof analyticalFunc === 'function') {
-        return analyticalFunc(param) / (4 * Math.PI); // Normalized
-    } else if (typeof analyticalFunc === 'number') {
-        return analyticalFunc / (4 * Math.PI); // Normalized
+function getExactValue(
+    functionName: string,
+    param: number,
+    testFunctionMap: Record<string, any>
+) {
+    const entry = testFunctionMap[functionName];
+    if (!entry) return undefined;
+    const analytical = entry.analyticalValue;
+    if (typeof analytical === 'function') {
+        return analytical(param) / (4 * Math.PI);
+    } else if (typeof analytical === 'number') {
+        return analytical / (4 * Math.PI);
     }
-
     return undefined;
 }
 
 // Compute Lebedev integral
-function computeLebedevIntegral(points, testFunc, param) {
+function computeLebedevIntegral(points: QuadPoint[], testEntry: any, param: number) {
     let sum = 0;
 
     for (let point of points) {
-        if (!point.weight) continue;
+        if (point.weight == null) continue;
 
-        const phi = Math.acos(Math.max(-1, Math.min(1, point.z)));
-        const theta = Math.atan2(point.y, point.x);
+        const zVal = point.z ?? 0;
+        const yVal = point.y ?? 0;
+        const xVal = point.x ?? 0;
+        const denom = Math.sqrt(xVal * xVal + yVal * yVal + zVal * zVal) || 1;
+        const phi = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal / denom)));
+        const theta = point.theta != null ? point.theta : Math.atan2(yVal, xVal);
 
-        const funcValue = testFunc(phi, theta, param);
-        sum += funcValue * point.weight;
+        const { x, y, z } = sphericalToCartesian(phi, theta);
+        const funcValue = testEntry.function(x, y, z, param);
+        sum += funcValue * (point.weight ?? 0);
     }
 
     return sum;
 }
 
 // Compute spherical design integral
-function computeSphericalDesignIntegral(points, testFunc, param) {
+function computeSphericalDesignIntegral(points: QuadPoint[], testEntry: any, param: number) {
     let sum = 0;
 
     for (let point of points) {
-        const phi = Math.acos(Math.max(-1, Math.min(1, point.z)));
-        const theta = Math.atan2(point.y, point.x);
+        const zVal = point.z ?? 0;
+        const yVal = point.y ?? 0;
+        const xVal = point.x ?? 0;
+        const denom = Math.sqrt(xVal * xVal + yVal * yVal + zVal * zVal) || 1;
+        const phi = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal / denom)));
+        const theta = point.theta != null ? point.theta : Math.atan2(yVal, xVal);
 
-        const funcValue = testFunc(phi, theta, param);
+        const { x, y, z } = sphericalToCartesian(phi, theta);
+        const funcValue = testEntry.function(x, y, z, param);
         sum += funcValue;
     }
 
@@ -526,41 +533,51 @@ function computeSphericalDesignIntegral(points, testFunc, param) {
 }
 
 // Compute Monte Carlo integral
-function computeMonteCarloIntegral(points, testFunc, param, method) {
+function computeMonteCarloIntegral(
+    points: QuadPoint[],
+    testEntry: any,
+    param: number,
+    method: 'uniform' | 'clustered'
+) {
     let sum = 0;
 
     for (let point of points) {
         // Use phi and theta from point if available, otherwise compute
-        const phi = point.phi !== undefined ? point.phi : Math.acos(Math.max(-1, Math.min(1, point.z)));
-        const theta = point.theta !== undefined ? point.theta : Math.atan2(point.y, point.x);
+        const zVal = point.z ?? 0;
+        const yVal = point.y ?? 0;
+        const xVal = point.x ?? 0;
+        const denom = Math.sqrt(xVal * xVal + yVal * yVal + zVal * zVal) || 1;
+        const phi = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal / denom)));
+        const theta = point.theta != null ? point.theta : Math.atan2(yVal, xVal);
 
-        const funcValue = testFunc(phi, theta, param);
+        const { x, y, z } = sphericalToCartesian(phi, theta);
+        const funcValue = testEntry.function(x, y, z, param);
 
         if (method === 'uniform') {
             sum += funcValue;
         } else { // clustered
             // For clustered, the weight already includes sin(phi) factor
-            sum += funcValue * point.weight * points.length;
+            sum += funcValue * ((point.weight ?? 0) * points.length);
         }
     }
 
     if (method === 'uniform') {
-        return sum / points.length; // Average value, then normalize below
+        return sum / points.length; // Average value on sphere
     } else {
-        return sum * 2 * Math.PI; // Clustered integration over [0,π]×[0,2π]
+        return sum; // Already weighted appropriately
     }
 }
 
 // Generate Gaussian Product quadrature points
 // Following Python approach: Gauss-Legendre for φ, Trapezoidal for θ
-function generateGaussianProduct(N, M) {
-    const points = [];
+function generateGaussianProduct(N: number, M: number) {
+    const points: QuadPoint[] = [];
 
     // Gauss-Legendre nodes and weights for [0, π] (phi direction)
-    const getGaussLegendreNodes = (n) => {
+    const getGaussLegendreNodes = (n: number) => {
         // Simplified Gauss-Legendre nodes for [-1, 1]
-        const nodes = [];
-        const weights = [];
+        const nodes: number[] = [];
+        const weights: number[] = [];
 
         if (n === 1) {
             nodes.push(0); weights.push(2);
@@ -593,9 +610,9 @@ function generateGaussianProduct(N, M) {
     };
 
     // Trapezoidal nodes for [0, 2π] (theta direction)
-    const getTrapezoidalNodes = (m) => {
-        const nodes = [];
-        const weights = [];
+    const getTrapezoidalNodes = (m: number) => {
+        const nodes: number[] = [];
+        const weights: number[] = [];
         const h = 2 * Math.PI / m;
 
         for (let i = 0; i < m; i++) {
@@ -629,18 +646,20 @@ function generateGaussianProduct(N, M) {
 }
 
 // Compute Gaussian Product integral
-function computeGaussianProductIntegral(points, testFunc, param) {
+function computeGaussianProductIntegral(points: QuadPoint[], testEntry: any, param: number) {
     let sum = 0;
 
     for (let point of points) {
-        if (!point.weight) continue;
+        if (point.weight == null) continue;
 
         // Use phi and theta directly from point (already computed correctly)
         const phi = point.phi;
         const theta = point.theta;
+        if (phi == null || theta == null) continue;
 
-        const funcValue = testFunc(phi, theta, param);
-        sum += funcValue * point.weight;
+        const { x, y, z } = sphericalToCartesian(phi, theta);
+        const funcValue = testEntry.function(x, y, z, param);
+        sum += funcValue * (point.weight ?? 0);
     }
 
     return sum / (4 * Math.PI); // Normalize for sphere as per Python reference
@@ -658,7 +677,10 @@ function updateEfficiencyPlot() {
     const traces = [];
 
     // Clear loading state
-    document.getElementById('efficiency-plot').classList.remove('loading');
+    const efficiencyPlotDiv = document.getElementById('efficiency-plot');
+    if (efficiencyPlotDiv) {
+        efficiencyPlotDiv.classList.remove('loading');
+    }
 
 
 
@@ -710,7 +732,7 @@ function updateEfficiencyPlot() {
         });
     }
 
-    const layout = {
+    const layout: any = {
         xaxis: {
             title: { text: 'Polynomial Degree (p)', font: { size: 14, color: '#2c3e50' } },
             gridcolor: '#e8e8e8',
@@ -743,14 +765,16 @@ function updateEfficiencyPlot() {
         showlegend: true
     };
 
-    const plotConfig = {
+    const plotConfig: any = {
         responsive: true,
         displayModeBar: true,
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
         toImageButtonOptions: { format: 'png', filename: 'efficiency_analysis', height: 600, width: 800 }
     };
 
-    Plotly.newPlot('efficiency-plot', traces, layout, plotConfig);
+    if (typeof Plotly !== 'undefined') {
+        Plotly.newPlot('efficiency-plot', traces, layout, plotConfig);
+    }
 }
 
 // Update error plot
@@ -758,7 +782,10 @@ function updateErrorPlot() {
     const traces = [];
 
     // Clear loading state
-    document.getElementById('error-plot').classList.remove('loading');
+    const errorPlotDiv = document.getElementById('error-plot');
+    if (errorPlotDiv) {
+        errorPlotDiv.classList.remove('loading');
+    }
 
     // Parse function key for display
     let functionKey = config.testFunction;
@@ -816,7 +843,7 @@ function updateErrorPlot() {
 
     const isLogScale = config.plotType === 'loglog';
 
-    const layout = {
+    const layout: any = {
         xaxis: {
             title: { text: 'Number of Points (N)', font: { size: 14, color: '#2c3e50' } },
             gridcolor: '#e8e8e8',
@@ -849,14 +876,16 @@ function updateErrorPlot() {
         showlegend: true
     };
 
-    const plotConfig = {
+    const plotConfig: any = {
         responsive: true,
         displayModeBar: true,
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
         toImageButtonOptions: { format: 'png', filename: 'error_analysis', height: 600, width: 800 }
     };
 
-    Plotly.newPlot('error-plot', traces, layout, plotConfig);
+    if (typeof Plotly !== 'undefined') {
+        Plotly.newPlot('error-plot', traces, layout, plotConfig);
+    }
 }
 
 // Update statistics
@@ -868,7 +897,7 @@ function updateStats() {
     let totalPoints = 0;
 
     for (let method of allMethods) {
-        const data = analysisData[method];
+        const data = analysisData[method as keyof typeof analysisData];
 
         if (data.points && data.points.length > 0) {
             totalMethods++;
@@ -889,7 +918,7 @@ function updateStats() {
 
     // Update HTML elements
     const totalMethodsEl = document.getElementById('total-methods');
-    if (totalMethodsEl) totalMethodsEl.textContent = totalMethods;
+    if (totalMethodsEl) totalMethodsEl.textContent = String(totalMethods);
 
     const maxEfficiencyEl = document.getElementById('max-efficiency');
     if (maxEfficiencyEl) maxEfficiencyEl.textContent = maxEfficiency.toFixed(3);
@@ -902,12 +931,13 @@ function updateStats() {
 }
 
 // Show loading state
-function showLoadingState(isLoading) {
+function showLoadingState(isLoading: boolean) {
     const plots = ['efficiency-plot', 'error-plot'];
 
     plots.forEach(plotId => {
         const plotDiv = document.getElementById(plotId);
         if (isLoading) {
+            if (!plotDiv) return;
             plotDiv.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #74b9ff;">
                     <div style="font-size: 1.2em; margin-bottom: 20px;">⏳ Loading analysis data...</div>
@@ -925,7 +955,7 @@ function showLoadingState(isLoading) {
             `;
         } else {
             // Clear loading content - plots will be updated separately
-            if (plotDiv.innerHTML.includes('Loading')) {
+            if (plotDiv && plotDiv.innerHTML.includes('Loading')) {
                 plotDiv.innerHTML = '';
             }
         }
@@ -933,7 +963,7 @@ function showLoadingState(isLoading) {
 }
 
 // Show error message
-function showError(message) {
+function showError(message: string) {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'error-message';
     errorDiv.innerHTML = `
@@ -941,7 +971,8 @@ function showError(message) {
         <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; color: #fff; cursor: pointer; font-size: 1.2em;">&times;</button>
     `;
 
-    document.querySelector('.controls-panel').appendChild(errorDiv);
+    const container = document.querySelector('.controls-panel');
+    if (container) container.appendChild(errorDiv);
 
     setTimeout(() => {
         if (errorDiv.parentElement) {
@@ -960,3 +991,10 @@ window.efficiencyAnalysis = {
     updatePlots,
     loadAnalysisData
 };
+
+function sphericalToCartesian(phi: number, theta: number) {
+    const x = Math.sin(phi) * Math.cos(theta);
+    const y = Math.sin(phi) * Math.sin(theta);
+    const z = Math.cos(phi);
+    return { x, y, z };
+}
