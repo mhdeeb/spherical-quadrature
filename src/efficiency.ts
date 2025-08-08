@@ -3,14 +3,30 @@ import {
     generateSphericalDesign,
     generateMonteCarloUniform,
     generateMonteCarloClustered,
-    generateProductQuadrature,
-    LEBEDEV_ORDERS,
-    AVAILABLE_FILES
-} from './sphere-quadrature-module.js';
+} from './sphere-quadrature-module.ts';
 
-import testFunctions from './test-functions.js';
+import testFunctions from './test-functions.ts';
 
 import lilGui from 'lil-gui';
+import { AVAILABLE_POINTS } from './constants.ts';
+
+type SphericalDesignType = 'HardinSloane' | 'WomersleySym' | 'WomersleyNonSym';
+type QuadPoint = { x: number | null; y: number | null; z: number | null; weight?: number | null; phi?: number | null; theta?: number | null };
+
+declare global {
+    interface Window {
+        testFunctionFolder?: any;
+        efficiencyAnalysis?: any;
+    }
+}
+import Plotly from 'plotly.js-dist-min';
+
+const LEBEDEV_ORDERS: Record<number, number> = AVAILABLE_POINTS.lebedev as unknown as Record<number, number>;
+const AVAILABLE_FILES: Record<SphericalDesignType, Record<number, number>> = {
+    HardinSloane: AVAILABLE_POINTS.HardinSloane as unknown as Record<number, number>,
+    WomersleySym: AVAILABLE_POINTS.WomersleySym as unknown as Record<number, number>,
+    WomersleyNonSym: AVAILABLE_POINTS.WomersleyNonSym as unknown as Record<number, number>,
+};
 
 // Configuration
 const config = {

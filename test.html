@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script type="module">
+        import { prod_quad } from "/src/sphere-quadrature-module.ts";
+        import testFunctions from "/src/test-functions.ts";
+        console.log(prod_quad(testFunctions[2].function), testFunctions[2].analyticalValue);
+    </script>
+</body>
+</html>

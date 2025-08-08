@@ -1,4 +1,4 @@
-import { SPHERE_RADIUS, AVAILABLE_POINTS } from './constants.js';
+import { SPHERE_RADIUS, AVAILABLE_POINTS } from './constants.ts';
 
 const pointCache: { [key: string]: { [key: number]: Point[] } } = {
     "lebedev": {},
@@ -8,25 +8,21 @@ const pointCache: { [key: string]: { [key: number]: Point[] } } = {
 };
 
 class Point {
-    x: number | null = null;
-    y: number | null = null;
-    z: number | null = null;
-    phi: number | null = null;
-    theta: number | null = null;
-    weight: number | null = null;
+    x: number;
+    y: number;
+    z: number;
+    phi: number;
+    theta: number;
+    weight: number;
 
     constructor(phi: number, theta: number, weight: number) {
         this.phi = phi;
         this.theta = theta;
         this.weight = weight;
 
-        this.calculateCartesian();
-    }
-
-    calculateCartesian(r = SPHERE_RADIUS) {
-        this.x = r * Math.sin(this.phi!) * Math.cos(this.theta!);
-        this.y = r * Math.sin(this.phi!) * Math.sin(this.theta!);
-        this.z = r * Math.cos(this.phi!);
+        this.x = SPHERE_RADIUS * Math.sin(this.phi) * Math.cos(this.theta);
+        this.y = SPHERE_RADIUS * Math.sin(this.phi) * Math.sin(this.theta);
+        this.z = SPHERE_RADIUS * Math.cos(this.phi);
     }
 }
 
@@ -41,7 +37,7 @@ function gaussLegendrePoints(degree: number) {
 
     for (let i = 0; i < degree; i++) {
         let x = Math.cos(Math.PI * (i + 0.75) / (degree + 0.5));
-        let p, dp;
+        let dp;
 
         while (true) {
             let p1 = 1;
@@ -108,9 +104,9 @@ function trapezoidal(fn: (x: number, ...args: any[]) => number, a: number, b: nu
     return (h / 2) * s;
 }
 
-function prod_quad(func: (theta: number, phi: number, ...args: any[]) => number, N = 20, M = 40, ...args: any[]) {
+function prod_quad(func: (phi: number, theta: number, ...args: any[]) => number, N = 20, M = 40, ...args: any[]) {
     let I = trapezoidal(
-        theta => gaussLegendre((phi: number, ...args: any[]) => func(phi, ...args) * Math.sin(phi), 0, Math.PI, N, theta, ...args),
+        (theta: number) => gaussLegendre((phi: number, ...innerArgs: any[]) => func(phi, theta, ...innerArgs) * Math.sin(phi), 0, Math.PI, N, ...args),
         0,
         2 * Math.PI,
         M,
@@ -159,15 +155,25 @@ function generateMonteCarloClustered(N: number) {
     return points;
 }
 
-async function generateLebedevPoints(N: number) {
-    let pointSize = Object.keys(AVAILABLE_POINTS["lebedev"]).reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
+async function generateLebedevPoints(N: number, selectBy: 'points' | 'order' = 'points') {
+    const lebedevMap = AVAILABLE_POINTS["lebedev"] as Record<number, number>;
+    const lebedevOrders = Object.keys(lebedevMap).map(k => Number(k));
 
-    if (pointCache["lebedev"][pointSize]) {
-        return pointCache["lebedev"][pointSize];
+    // Choose order either by order proximity or by points proximity
+    let chosenOrder: number;
+    if (selectBy === 'order') {
+        chosenOrder = lebedevOrders.reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
+    } else {
+        // selectBy === 'points'
+        chosenOrder = lebedevOrders.reduce((prev: number, curr: number) => (Math.abs(lebedevMap[curr] - N) < Math.abs(lebedevMap[prev] - N) ? curr : prev));
+    }
+
+    if (pointCache["lebedev"][chosenOrder]) {
+        return pointCache["lebedev"][chosenOrder];
     }
 
     try {
-        let response = await fetch(`PointDistFiles/lebedev/lebedev_${AVAILABLE_POINTS["lebedev"][pointSize].toString().padStart(3, '0')}`);
+        let response = await fetch(`PointDistFiles/lebedev/lebedev_${lebedevMap[chosenOrder].toString().padStart(3, '0')}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -176,7 +182,7 @@ async function generateLebedevPoints(N: number) {
         let text = await response.text();
         let lines = text.trim().split('\n');
 
-        let points = [];
+        let points: Point[] = [];
 
         for (let line of lines) {
             if (line.trim()) {
@@ -193,18 +199,18 @@ async function generateLebedevPoints(N: number) {
             }
         }
 
-        pointCache["lebedev"][pointSize] = points;
+        pointCache["lebedev"][chosenOrder] = points;
 
         return points;
 
     } catch (error: any) {
-        console.warn(`Could not load Lebedev data for N = ${pointSize}: ${error.message}`);
+        console.warn(`Could not load Lebedev data for order = ${chosenOrder}: ${error.message}`);
         return null;
     }
 }
 
 function generateProductQuadrature(N: number) {
-    let points = [];
+    let points: Point[] = [];
 
     N = Math.round(Math.sqrt(N / 2));
 
@@ -217,27 +223,39 @@ function generateProductQuadrature(N: number) {
 
     for (let i = 0; i < phi.length; i++) {
         let point = new Point(phi[i], theta[i], weights[i]);
-
         points.push(point);
     }
 
     return points;
 }
 
-async function generateSphericalDesign(N: number, designType = 'HardinSloane') {
-    let pointSize = Object.keys(AVAILABLE_POINTS[designType]).reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
+async function generateSphericalDesign(
+    N: number,
+    designType: 'HardinSloane' | 'WomersleySym' | 'WomersleyNonSym' = 'HardinSloane',
+    selectBy: 'points' | 'degree' = 'points'
+) {
+    const designMap = AVAILABLE_POINTS[designType] as Record<number, number>; // degree -> points
+    const degreeKeys = Object.keys(designMap).map(k => Number(k));
 
-    if (pointCache[designType][pointSize]) {
-        return pointCache[designType][pointSize];
+    // Choose degree either by proximity in degree or by proximity in number of points
+    let chosenDegree: number;
+    if (selectBy === 'degree') {
+        chosenDegree = degreeKeys.reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
+    } else {
+        chosenDegree = degreeKeys.reduce((prev: number, curr: number) => (Math.abs(designMap[curr] - N) < Math.abs(designMap[prev] - N) ? curr : prev));
+    }
+
+    if (pointCache[designType][chosenDegree]) {
+        return pointCache[designType][chosenDegree];
     }
 
     try {
         const fileName = {
-            "HardinSloane": "hs",
-            "WomersleySym": "ss",
-            "WomersleyNonSym": "sf"
-        };
-        let response = await fetch(`PointDistFiles/sphdesigns/${designType}/${fileName[designType] + AVAILABLE_POINTS[designType][pointSize].toString().padStart(3, '0')}.${pointSize.toString().padStart(5, '0')}`);
+            HardinSloane: "hs",
+            WomersleySym: "ss",
+            WomersleyNonSym: "sf"
+        } as const;
+        let response = await fetch(`PointDistFiles/sphdesigns/${designType}/${fileName[designType] + designMap[chosenDegree].toString().padStart(3, '0')}.${chosenDegree.toString().padStart(5, '0')}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -246,7 +264,7 @@ async function generateSphericalDesign(N: number, designType = 'HardinSloane') {
         let text = await response.text();
         let lines = text.trim().split('\n');
 
-        let points = [];
+        let points: Point[] = [];
 
         for (let line of lines) {
             if (line.trim()) {
@@ -259,20 +277,20 @@ async function generateSphericalDesign(N: number, designType = 'HardinSloane') {
                     let phi = Math.acos(z);
                     let theta = Math.atan2(y, x);
 
-                    let point = new Point(phi, theta, 1.0 / points.length);
+                    let point = new Point(phi, theta, 1.0 / lines.length);
 
                     points.push(point);
                 }
             }
         }
 
-        pointCache[designType][pointSize] = points;
+        pointCache[designType][chosenDegree] = points;
 
-        console.log(`Loaded ${designType} with ${points.length} points`);
+        console.log(`Loaded ${designType} degree ${chosenDegree} with ${points.length} points`);
         return points;
 
     } catch (error: any) {
-        console.warn(`Could not load ${designType} data for N = ${pointSize}: ${error.message}`);
+        console.warn(`Could not load ${designType} data for degree = ${chosenDegree}: ${error.message}`);
         return null;
     }
 }

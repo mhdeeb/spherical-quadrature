@@ -3,7 +3,6 @@ body {
     padding: 0;
     font-family: 'Arial', sans-serif;
     background-color: #f0f0f0;
-    overflow: hidden;
 }
 
 /* Prevent canvas copying */
@@ -25,7 +24,6 @@ canvas {
     position: relative;
     width: 100vw;
     height: 100vh;
-    overflow: hidden;
 }
 
 .canvas-container {
@@ -48,6 +46,7 @@ canvas {
     min-width: 280px;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     font-family: 'Segoe UI', 'Arial', sans-serif;
 }
 
@@ -170,14 +169,7 @@ canvas {
     background-color: rgba(79, 195, 247, 0.05);
 }
 
-.error-message {
-    color: #f06292;
-    font-style: italic;
-    background-color: rgba(240, 98, 146, 0.1);
-    padding: 8px;
-    border-radius: 4px;
-    border: 1px solid rgba(240, 98, 146, 0.2);
-}
+/* .error-message defined once below; removed duplicate */
 
 /* Controls Panel */
 .controls-panel {
@@ -188,6 +180,7 @@ canvas {
     height: 100vh;
     background-color: rgba(25, 25, 30, 0.96);
     backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-left: 1px solid rgba(255, 255, 255, 0.12);
     overflow-y: auto;
     z-index: 1000;
@@ -273,6 +266,14 @@ canvas {
     padding: 8px;
     border-radius: 4px;
     border: 1px solid rgba(240, 98, 146, 0.2);
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    .loading::after {
+        animation: none;
+        border-top-color: transparent;
+    }
 }
 
 /* Stats Panel */
