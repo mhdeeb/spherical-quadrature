@@ -18,7 +18,6 @@ type QuadPoint = { x?: number | null; y?: number | null; z?: number | null; weig
 
 type Mode = 'harmonics' | 'function';
 type QuadMethod = 'monte_carlo_uniform' | 'monte_carlo_clustered' | 'lebedev' | 'product' | 'HardinSloane' | 'WomersleySym' | 'WomersleyNonSym';
-type TestFunctionKey = 'f1' | 'f2' | 'f3' | 'f4' | 'f5';
 type SphereDisplay = 'wireframe' | 'colormap' | 'solid';
 
 interface AppState {
@@ -27,7 +26,7 @@ interface AppState {
     numPoints: number;
     harmonicL: number;
     harmonicM: number;
-    testFunction: TestFunctionKey;
+    testFunction: any;
     functionParam: number;
     sphereDisplay: SphereDisplay;
     sphereOpacity: number;
@@ -44,7 +43,7 @@ declare global {
         numPoints: number;
         harmonicL: number;
         harmonicM: number;
-        currentTestFunction: 'f1' | 'f2' | 'f3' | 'f4' | 'f5';
+        currentTestFunction: any;
         functionParam: number;
         showSphere: boolean;
         showPoints: boolean;
@@ -80,7 +79,6 @@ window.currentQuadMethod = 'monte_carlo_uniform';
 window.numPoints = 100;
 window.harmonicL = 2;
 window.harmonicM = 0;
-window.currentTestFunction = 'f1';
 window.functionParam = 1.0;
 
 window.showSphere = true;
@@ -227,6 +225,23 @@ function updateSurfaceVisualization() {
     const vertices = geometry.attributes.position.array;
     const colors = new Float32Array(vertices.length);
 
+    let maxVal = 0;
+    let minVal = 0;
+
+    for (let i = 0; i < vertices.length; i += 3) {
+        const x = vertices[i];
+        const y = vertices[i + 1];
+        const z = vertices[i + 2];
+
+        const r = Math.sqrt(x * x + y * y + z * z);
+        const phi = Math.acos(Math.max(-1, Math.min(1, z / r)));
+        const theta = Math.atan2(y, x);
+        const funcValue = window.currentTestFunction.function(phi, theta, window.functionParam);
+
+        maxVal = Math.max(maxVal, funcValue);
+        minVal = Math.min(minVal, funcValue);
+    }
+
     for (let i = 0; i < vertices.length; i += 3) {
         const x = vertices[i];
         const y = vertices[i + 1];
@@ -241,16 +256,14 @@ function updateSurfaceVisualization() {
         if (window.currentMode === 'harmonics') {
             try {
                 const ylm = computeSphericalHarmonic(window.harmonicL, window.harmonicM, theta, phi);
-                const maxVal = 1;
                 colorValue = Math.max(0, Math.min(1, (ylm + maxVal) / (2 * maxVal)));
             } catch (e) {
                 colorValue = 0.5;
             }
         } else if (window.currentMode === 'function') {
             try {
-                const funcValue = evaluateTestFunction(window.currentTestFunction, phi, theta, window.functionParam);
-                const range = getFunctionRange(window.currentTestFunction, window.functionParam);
-                colorValue = Math.max(0, Math.min(1, (funcValue - range.min) / (range.max - range.min)));
+                const funcValue = window.currentTestFunction.function(phi, theta, window.functionParam);
+                colorValue = Math.max(0, Math.min(1, (funcValue - minVal) / (maxVal - minVal)));
             } catch (e) {
                 colorValue = 0.5;
             }
@@ -399,9 +412,8 @@ function updateInfoPanel() {
     } else if (window.currentMode === 'function') {
         content += `<div class="info-section">`;
         content += `<div class="info-header">📈 Test Function</div>`;
-        const tfEntry = Object.fromEntries(testFunctions.map((t: any) => [t.value, t]))[window.currentTestFunction];
-        const tfName = tfEntry?.name ?? window.currentTestFunction;
-        const tfDesc = tfEntry?.description ?? '';
+        const tfName = window.currentTestFunction.name;
+        const tfDesc = window.currentTestFunction.description;
         content += `<div class="info-row"><span class="info-label">Function:</span> ${tfName}</div>`;
         if (tfDesc) {
             content += `<div class="info-row"><span class="info-label">Details:</span> <span class="info-detail">${tfDesc}</span></div>`;
@@ -441,7 +453,7 @@ function computeIntegrationResults() {
                 const denom = Math.sqrt(xVal * xVal + yVal * yVal + zVal * zVal) || 1;
                 const phi = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal / denom)));
                 const theta = point.theta != null ? point.theta : Math.atan2(yVal, xVal);
-                const funcValue = evaluateTestFunction(window.currentTestFunction, phi, theta, window.functionParam);
+                const funcValue = window.currentTestFunction.function(phi, theta, window.functionParam);
                 const weight = point.weight ?? 1 / N;
                 if (window.currentQuadMethod === 'lebedev' || window.currentQuadMethod === 'product') {
                     numericalValue += funcValue * weight;
@@ -462,7 +474,7 @@ function computeIntegrationResults() {
                 numericalValue = sumWeighted / (sumWeights || 1);
             }
 
-            analyticalValue = getAnalyticalValue(window.currentTestFunction, window.functionParam);
+            analyticalValue = window.currentTestFunction.analyticalValue(window.functionParam);
             if (analyticalValue !== null) {
                 analyticalValue = analyticalValue / (4 * Math.PI);
             }
@@ -604,10 +616,6 @@ async function updateQuadraturePoints() {
             case 'lebedev':
                 console.log('📊 Loading Lebedev points...');
                 points = await generateLebedevPoints(calculationPoints);
-                if (!points) {
-                    console.warn('Lebedev data not available, falling back to Monte Carlo');
-                    points = generateMonteCarloUniform(calculationPoints);
-                }
                 break;
             case 'product':
                 points = generateProductQuadrature(calculationPoints);
@@ -658,7 +666,7 @@ const appState: AppState = {
     harmonicL: 2,
     harmonicM: 0,
 
-    testFunction: 'f1',
+    testFunction: testFunctions[0],
     functionParam: 1.0,
 
     sphereDisplay: 'colormap',
@@ -697,7 +705,17 @@ function syncWindowToState() {
     if (typeof window.numPoints === 'number') appState.numPoints = window.numPoints;
     if (typeof window.harmonicL === 'number') appState.harmonicL = window.harmonicL;
     if (typeof window.harmonicM === 'number') appState.harmonicM = window.harmonicM;
-    if (window.currentTestFunction) appState.testFunction = window.currentTestFunction as TestFunctionKey;
+    if (window.currentTestFunction) {
+        const candidate = window.currentTestFunction as any;
+        if (typeof candidate === 'string') {
+            const matched = (testFunctions as any[]).find(tf => tf.value === candidate);
+            if (matched) {
+                appState.testFunction = matched as any;
+            }
+        } else {
+            appState.testFunction = candidate as any;
+        }
+    }
     if (typeof window.functionParam === 'number') appState.functionParam = window.functionParam;
     if (window.sphereDisplay) appState.sphereDisplay = window.sphereDisplay as SphereDisplay;
     if (typeof window.sphereOpacity === 'number') appState.sphereOpacity = window.sphereOpacity;
@@ -799,6 +817,21 @@ function validateStateUpdates(updates: Partial<AppState>) {
         }
     }
 
+    // Normalize testFunction input: accept string ids from GUI and map to full object
+    if ('testFunction' in validated) {
+        const incoming: any = (validated as any).testFunction;
+        if (typeof incoming === 'string') {
+            const matched = (testFunctions as any[]).find(tf => tf.value === incoming);
+            if (matched) {
+                (validated as any).testFunction = matched;
+            } else {
+                delete (validated as any).testFunction; // ignore invalid ids
+            }
+        } else if (!incoming || typeof incoming.function !== 'function') {
+            (validated as any).testFunction = appState.testFunction;
+        }
+    }
+
     return validated;
 }
 
@@ -822,7 +855,7 @@ function syncStateToGUI() {
         settings.numPoints = appState.numPoints;
         settings.harmonicL = appState.harmonicL;
         settings.harmonicM = appState.harmonicM;
-        settings.testFunction = appState.testFunction;
+        settings.testFunction = (appState.testFunction as any)?.value;
         settings.functionParam = appState.functionParam;
         settings.sphereDisplay = appState.sphereDisplay;
         settings.sphereOpacity = appState.sphereOpacity;
@@ -914,7 +947,7 @@ const settings: any = {
     harmonicL: appState.harmonicL,
     harmonicM: appState.harmonicM,
 
-    testFunction: appState.testFunction,
+    testFunction: (appState.testFunction as any)?.value,
     functionParam: appState.functionParam,
 
     sphereDisplay: appState.sphereDisplay,
@@ -1002,8 +1035,8 @@ function initializeGUI() {
     functionsFolder
         .add(settings, 'testFunction', functionOptions)
         .name('Function')
-        .onChange((value: Window['currentTestFunction']) => {
-            updateState({ testFunction: value });
+        .onChange((value: string) => {
+            updateState({ testFunction: value as any });
         });
 
     functionsFolder.add(settings, 'functionParam', 0.1, 10, 0.1).name('Parameter').onChange((value: number) => {
