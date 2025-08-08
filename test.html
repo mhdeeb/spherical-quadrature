@@ -9,7 +9,7 @@
     <script type="module">
         import { prod_quad } from "/src/sphere-quadrature-module.ts";
         import testFunctions from "/src/test-functions.ts";
-        console.log(prod_quad(testFunctions[2].function), testFunctions[2].analyticalValue);
+        console.log(prod_quad(testFunctions[2].function), testFunctions[2].analyticalValue(9));
     </script>
 </body>
 </html>

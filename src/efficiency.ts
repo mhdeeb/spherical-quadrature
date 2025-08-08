@@ -253,7 +253,7 @@ async function calculateEfficiencyData() {
     for (let order of lebedevOrders) {
         if (order > 131) break; // Limit for visualization
 
-        const points = await generateLebedevPoints(order, 'order'); // Select by order
+        const points = await generateLebedevPoints(order, true);
 
         // Skip if data couldn't be loaded (no approximations)
         if (!points || points.length === 0) {
@@ -381,7 +381,7 @@ async function calculateErrorData() {
         if (order > 131) break;
 
         try {
-            const points = await generateLebedevPoints(order);
+            const points = await generateLebedevPoints(order, true);
 
             // Skip if data couldn't be loaded (no approximations)
             if (!points || points.length === 0) {

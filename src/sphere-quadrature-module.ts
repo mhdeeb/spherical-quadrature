@@ -154,26 +154,27 @@ function generateMonteCarloClustered(N: number) {
 
     return points;
 }
-
-async function generateLebedevPoints(N: number, selectBy: 'points' | 'order' = 'points') {
-    const lebedevMap = AVAILABLE_POINTS["lebedev"] as Record<number, number>;
-    const lebedevOrders = Object.keys(lebedevMap).map(k => Number(k));
-
-    // Choose order either by order proximity or by points proximity
-    let chosenOrder: number;
-    if (selectBy === 'order') {
-        chosenOrder = lebedevOrders.reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
-    } else {
-        // selectBy === 'points'
-        chosenOrder = lebedevOrders.reduce((prev: number, curr: number) => (Math.abs(lebedevMap[curr] - N) < Math.abs(lebedevMap[prev] - N) ? curr : prev));
-    }
-
-    if (pointCache["lebedev"][chosenOrder]) {
-        return pointCache["lebedev"][chosenOrder];
-    }
-
+async function generateLebedevPoints(N: number, byOrder: boolean = false) {
     try {
-        let response = await fetch(`PointDistFiles/lebedev/lebedev_${lebedevMap[chosenOrder].toString().padStart(3, '0')}`);
+        let num: number;
+        let response: Response;
+
+        if (byOrder) {
+            num = Number(Object.values(AVAILABLE_POINTS["lebedev"]).reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev)));
+            if (pointCache["lebedev"][num])
+                return pointCache["lebedev"][num];
+
+            response = await fetch(`PointDistFiles/lebedev/lebedev_${num.toString().padStart(3, '0')}`);
+        } else {
+            num = Number(Object.keys(AVAILABLE_POINTS["lebedev"]).reduce((prev: string, curr: string) => (Math.abs(Number(curr) - N) < Math.abs(Number(prev) - N) ? curr : prev)));
+            for (let key of Object.keys(pointCache["lebedev"])) {
+                let tmpPoints = pointCache["lebedev"][Number(key)];
+                if (tmpPoints.length == num)
+                    return tmpPoints;
+            }
+
+            response = await fetch(`PointDistFiles/lebedev/lebedev_${AVAILABLE_POINTS["lebedev"][num].toString().padStart(3, '0')}`);
+        }
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -182,7 +183,7 @@ async function generateLebedevPoints(N: number, selectBy: 'points' | 'order' = '
         let text = await response.text();
         let lines = text.trim().split('\n');
 
-        let points: Point[] = [];
+        let points = [];
 
         for (let line of lines) {
             if (line.trim()) {
@@ -199,12 +200,15 @@ async function generateLebedevPoints(N: number, selectBy: 'points' | 'order' = '
             }
         }
 
-        pointCache["lebedev"][chosenOrder] = points;
+        if (byOrder)
+            pointCache["lebedev"][num] = points;
+        else
+            pointCache["lebedev"][AVAILABLE_POINTS["lebedev"][num]] = points;
 
         return points;
 
     } catch (error: any) {
-        console.warn(`Could not load Lebedev data for order = ${chosenOrder}: ${error.message}`);
+        console.warn(`Could not load Lebedev data for N = ${N}: ${error.message}`);
         return null;
     }
 }

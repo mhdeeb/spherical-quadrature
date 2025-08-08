@@ -6,12 +6,12 @@ function sphericalToCartesian(phi: number, theta: number) {
     };
 }
 
-function testFunction1(phi: number, theta: number, a = 1) {
+function testFunction1(phi: number, theta: number, _a = 1) {
     const { x, y, z } = sphericalToCartesian(phi, theta);
     return 1 + x + y * y + x * x * y + Math.pow(x, 4) + Math.pow(y, 5) + x * x * y * y * z * z;
 }
 
-function testFunction2(phi: number, theta: number, a = 1) {
+function testFunction2(phi: number, theta: number, _a = 1) {
     const { x, y, z } = sphericalToCartesian(phi, theta);
     let term1 = 0.75 * Math.exp(-0.25 * (
         Math.pow(9 * x - 2, 2) +
@@ -51,13 +51,13 @@ function testFunction4(phi: number, theta: number, a = 9) {
 }
 
 function testFunction5(phi: number, theta: number, a = 9) {
-    const { x, y, z } = sphericalToCartesian(phi, theta);
+    const { x, y } = sphericalToCartesian(phi, theta);
     return (1 + Math.sign(-a * (Math.PI * x + y))) / (1.0 * a);
 }
 
 const testFunctions = [
-    { value: 'f1', name: 'Polynomial', description: '1 + x + y² + x²y + x⁴ + y⁵ + x²y²z²', function: testFunction1, analyticalValue: 216 * Math.PI / 35 / (4 * Math.PI) },
-    { value: 'f2', name: 'Gaussian Peaks', description: 'Sum of Gaussian functions', function: testFunction2, analyticalValue: 6.6961822200736179253 / (4 * Math.PI) },
+    { value: 'f1', name: 'Polynomial', description: '1 + x + y² + x²y + x⁴ + y⁵ + x²y²z²', function: testFunction1, analyticalValue: (_a: number) => 216 * Math.PI / 35 / (4 * Math.PI) },
+    { value: 'f2', name: 'Gaussian Peaks', description: 'Sum of Gaussian functions', function: testFunction2, analyticalValue: (_a: number) => 6.6961822200736179253 / (4 * Math.PI) },
     { value: 'f3', name: 'Hyperbolic Tangent', description: 'tanh(-a(x + y - z))', function: testFunction3, analyticalValue: (a: number) => 4 * Math.PI / a / (4 * Math.PI) },
     { value: 'f4', name: 'Sign Function 1', description: 'sign(-a(x + y - z))', function: testFunction4, analyticalValue: (a: number) => 4 * Math.PI / a / (4 * Math.PI) },
     { value: 'f5', name: 'Sign Function 2', description: 'sign(-a(πx + y))', function: testFunction5, analyticalValue: (a: number) => 4 * Math.PI / a / (4 * Math.PI) },
