@@ -9,9 +9,11 @@ import testFunctions from './test-functions.ts';
 
 import lilGui from 'lil-gui';
 import { AVAILABLE_POINTS } from './constants.ts';
+import type { CacheItem } from './cache-types.ts';
 
 type SphericalDesignType = 'HardinSloane' | 'WomersleySym' | 'WomersleyNonSym';
 type QuadPoint = { x: number | null; y: number | null; z: number | null; weight?: number | null; phi?: number | null; theta?: number | null };
+type PointsCacheItem = CacheItem<QuadPoint[]>;
 
 declare global {
     interface Window {
@@ -64,33 +66,29 @@ const colors: Record<string, string> = {
 async function getSphericalDesignByDegree(
     designType: SphericalDesignType,
     degree: number
-): Promise<QuadPoint[] | null> {
+): Promise<PointsCacheItem | null> {
     const availableForType = AVAILABLE_FILES[designType];
     const pointCount = availableForType?.[degree];
     if (pointCount) {
-        return await generateSphericalDesign(pointCount, designType) as unknown as QuadPoint[];
+        return await generateSphericalDesign(pointCount, designType);
     }
     return null;
 }
 
 // Initialize the application
 async function init() {
-    console.log('🚀 Initializing Efficiency Analysis...');
+
 
     try {
-        console.log('📋 Step 1: Initializing GUI...');
         initializeGUI();
 
-        console.log('📊 Step 2: Loading analysis data...');
         await loadAnalysisData();
 
-        console.log('📈 Step 3: Updating plots...');
         updatePlots();
 
-        console.log('📋 Step 4: Updating stats...');
         updateStats();
 
-        console.log('✅ Efficiency Analysis initialized successfully');
+
     } catch (error) {
         console.error('❌ Failed to initialize:', error);
         const message = (error instanceof Error) ? error.message : String(error);
@@ -100,26 +98,23 @@ async function init() {
 
 // Initialize GUI controls
 function initializeGUI() {
-    console.log('🔍 Checking GUI container...');
     const container = document.getElementById('gui-container');
     if (!container) {
         console.error('❌ GUI container not found!');
         return;
     }
-    console.log('✅ GUI container found:', container);
 
-    console.log('🔍 Checking lilGui availability...');
+
     if (typeof lilGui === 'undefined') {
         console.error('❌ lilGui is not available! Import failed.');
         return;
     }
-    console.log('✅ lilGui available:', lilGui);
 
-    console.log('🔨 Creating GUI instance...');
+
     try {
         gui = new lilGui({ container: container, width: 340 });
         gui.title('📊 Spherical Quadrature Analysis');
-        console.log('✅ GUI instance created successfully');
+
     } catch (error) {
         console.error('❌ Failed to create GUI instance:', error);
         return;
@@ -194,14 +189,14 @@ function initializeGUI() {
 
 
 
-    console.log('✅ GUI initialized successfully');
+
 }
 
 
 
 // Load and calculate analysis data
 async function loadAnalysisData() {
-    console.log('📊 Loading analysis data...');
+
 
     // Show loading state
     showLoadingState(true);
@@ -219,7 +214,7 @@ async function loadAnalysisData() {
         await calculateEfficiencyData();
         await calculateErrorData();
 
-        console.log('✅ Analysis data loaded successfully');
+
     } catch (error) {
         console.error('❌ Failed to load analysis data:', error);
         throw error;
@@ -230,7 +225,7 @@ async function loadAnalysisData() {
 
 // Calculate efficiency factors based on McLaren (1963)
 async function calculateEfficiencyData() {
-    console.log('📈 Calculating efficiency factors...');
+
 
     // Clear existing data
     analysisData.lebedev.degrees = [];
@@ -253,15 +248,15 @@ async function calculateEfficiencyData() {
     for (let order of lebedevOrders) {
         if (order > 131) break; // Limit for visualization
 
-        const points = await generateLebedevPoints(order, true);
+        const pointsItem = await generateLebedevPoints(order, true);
 
         // Skip if data couldn't be loaded (no approximations)
-        if (!points || points.length === 0) {
+        if (!pointsItem || pointsItem.data.length === 0) {
             console.warn(`Skipping Lebedev order ${order} - data not available`);
             continue;
         }
 
-        const actualPoints = points.length;
+        const actualPoints = pointsItem.data.length;
 
         if (actualPoints > config.maxPoints) break;
 
@@ -345,7 +340,7 @@ async function calculateEfficiencyData() {
 
 // Calculate integration errors for test functions
 async function calculateErrorData() {
-    console.log('🔬 Calculating integration errors...');
+
 
     // Clear existing error data
     analysisData.lebedev.errors = [];
@@ -381,19 +376,19 @@ async function calculateErrorData() {
         if (order > 131) break;
 
         try {
-            const points = await generateLebedevPoints(order, true);
+            const pointsItem = await generateLebedevPoints(order, true);
 
             // Skip if data couldn't be loaded (no approximations)
-            if (!points || points.length === 0) {
+            if (!pointsItem || pointsItem.data.length === 0) {
                 console.warn(`Skipping Lebedev order ${order} for error calculation - data not available`);
                 continue;
             }
 
-            const actualPoints = points.length;
+            const actualPoints = pointsItem.data.length;
 
             if (actualPoints > config.maxPoints) break;
 
-            const numericalValue = computeLebedevIntegral(points, testEntry, config.functionParam);
+            const numericalValue = computeLebedevIntegral(pointsItem.data, testEntry, config.functionParam);
             const error = Math.abs(exactValue - numericalValue);
             analysisData.lebedev.points.push(actualPoints);
             analysisData.lebedev.errors.push(error);
@@ -411,14 +406,14 @@ async function calculateErrorData() {
         config.sphericalDesignType === 'WomersleySym' ? 2 : 1) {
 
         try {
-            const points = await getSphericalDesignByDegree(config.sphericalDesignType as SphericalDesignType, degree);
-            if (!points) continue; // Skip unavailable degrees
+            const pointsItem = await getSphericalDesignByDegree(config.sphericalDesignType as SphericalDesignType, degree);
+            if (!pointsItem) continue; // Skip unavailable degrees
 
-            const actualPoints = points.length;
+            const actualPoints = pointsItem.data.length;
 
             if (actualPoints > config.maxPoints) continue;
 
-            const numericalValue = computeSphericalDesignIntegral(points, testEntry, config.functionParam);
+            const numericalValue = computeSphericalDesignIntegral(pointsItem.data, testEntry, config.functionParam);
             const error = Math.abs(exactValue - numericalValue);
             analysisData.sphericalDesign.points.push(actualPoints);
             analysisData.sphericalDesign.errors.push(error);
@@ -504,8 +499,7 @@ function computeLebedevIntegral(points: QuadPoint[], testEntry: any, param: numb
         const phi = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal / denom)));
         const theta = point.theta != null ? point.theta : Math.atan2(yVal, xVal);
 
-        const { x, y, z } = sphericalToCartesian(phi, theta);
-        const funcValue = testEntry.function(x, y, z, param);
+        const funcValue = testEntry.function(phi, theta, param);
         sum += funcValue * (point.weight ?? 0);
     }
 
@@ -524,8 +518,7 @@ function computeSphericalDesignIntegral(points: QuadPoint[], testEntry: any, par
         const phi = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal / denom)));
         const theta = point.theta != null ? point.theta : Math.atan2(yVal, xVal);
 
-        const { x, y, z } = sphericalToCartesian(phi, theta);
-        const funcValue = testEntry.function(x, y, z, param);
+        const funcValue = testEntry.function(phi, theta, param);
         sum += funcValue;
     }
 
@@ -550,8 +543,7 @@ function computeMonteCarloIntegral(
         const phi = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal / denom)));
         const theta = point.theta != null ? point.theta : Math.atan2(yVal, xVal);
 
-        const { x, y, z } = sphericalToCartesian(phi, theta);
-        const funcValue = testEntry.function(x, y, z, param);
+        const funcValue = testEntry.function(phi, theta, param);
 
         if (method === 'uniform') {
             sum += funcValue;
@@ -657,8 +649,7 @@ function computeGaussianProductIntegral(points: QuadPoint[], testEntry: any, par
         const theta = point.theta;
         if (phi == null || theta == null) continue;
 
-        const { x, y, z } = sphericalToCartesian(phi, theta);
-        const funcValue = testEntry.function(x, y, z, param);
+        const funcValue = testEntry.function(phi, theta, param);
         sum += funcValue * (point.weight ?? 0);
     }
 
@@ -992,9 +983,4 @@ window.efficiencyAnalysis = {
     loadAnalysisData
 };
 
-function sphericalToCartesian(phi: number, theta: number) {
-    const x = Math.sin(phi) * Math.cos(theta);
-    const y = Math.sin(phi) * Math.sin(theta);
-    const z = Math.cos(phi);
-    return { x, y, z };
-}
+// Removed sphericalToCartesian helper; we work directly in (phi, theta)

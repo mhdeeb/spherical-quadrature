@@ -1,6 +1,9 @@
 import { SPHERE_RADIUS, AVAILABLE_POINTS } from './constants.ts';
+import type { CacheItem, BoundingBox3D, NumericRange } from './cache-types.ts';
 
-const pointCache: { [key: string]: { [key: number]: Point[] } } = {
+type PointsCacheItem = CacheItem<Point[]>;
+
+const pointCache: { [key: string]: { [key: number]: PointsCacheItem } } = {
     "lebedev": {},
     "HardinSloane": {},
     "WomersleySym": {},
@@ -23,6 +26,127 @@ class Point {
         this.x = SPHERE_RADIUS * Math.sin(this.phi) * Math.cos(this.theta);
         this.y = SPHERE_RADIUS * Math.sin(this.phi) * Math.sin(this.theta);
         this.z = SPHERE_RADIUS * Math.cos(this.phi);
+    }
+}
+
+function generateMonteCarloUniform(N: number) {
+    let points = [];
+
+    for (let i = 0; i < N; i++) {
+        // Generate uniform random points on unit sphere
+        let u1 = Math.random();
+        let u2 = Math.random();
+
+        let phi = Math.acos(2 * u1 - 1); // Polar angle
+        let theta = 2 * Math.PI * u2;     // Azimuthal angle
+
+        let point = new Point(phi, theta, 1.0 / N);
+
+
+        points.push(point);
+    }
+
+    return points;
+}
+
+function generateMonteCarloClustered(N: number) {
+    let points = [];
+
+    for (let i = 0; i < N; i++) {
+        // Generate points with clustering towards poles
+        let u1 = Math.random();
+        let u2 = Math.random();
+
+        let phi = u1 * Math.PI;           // Uniform in [0, π] - causes clustering
+        let theta = 2 * Math.PI * u2;     // Uniform in [0, 2π]
+
+        let point = new Point(phi, theta, Math.sin(phi) / N);
+
+
+        points.push(point);
+    }
+
+    return points;
+}
+
+async function generateLebedevPoints(N: number, byOrder: boolean = false): Promise<PointsCacheItem | null> {
+    try {
+        let num: number;
+        let response: Response;
+
+        if (byOrder) {
+            num = Number(Object.values(AVAILABLE_POINTS["lebedev"]).reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev)));
+            if (pointCache["lebedev"][num])
+                return pointCache["lebedev"][num];
+
+            response = await fetch(`PointDistFiles/lebedev/lebedev_${num.toString().padStart(3, '0')}`);
+        } else {
+            num = Number(Object.keys(AVAILABLE_POINTS["lebedev"]).reduce((prev: string, curr: string) => (Math.abs(Number(curr) - N) < Math.abs(Number(prev) - N) ? curr : prev)));
+            for (let key of Object.keys(pointCache["lebedev"])) {
+                const cached = pointCache["lebedev"][Number(key)];
+                if (cached && cached.data.length == num)
+                    return cached;
+            }
+
+            response = await fetch(`PointDistFiles/lebedev/lebedev_${AVAILABLE_POINTS["lebedev"][num].toString().padStart(3, '0')}`);
+        }
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        let text = await response.text();
+        let lines = text.trim().split('\n');
+
+        let points: Point[] = [];
+        // Prepare bounding box and weight range trackers
+        let minX = Number.POSITIVE_INFINITY, minY = Number.POSITIVE_INFINITY, minZ = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY;
+        let minW = Number.POSITIVE_INFINITY, maxW = Number.NEGATIVE_INFINITY;
+
+        for (let line of lines) {
+            if (line.trim()) {
+                let parts = line.trim().split(/\s+/);
+                if (parts.length >= 3) {
+                    let theta = parseFloat(parts[0]) * Math.PI / 180;
+                    let phi = parseFloat(parts[1]) * Math.PI / 180;
+                    let weight = parseFloat(parts[2]);
+
+                    let point = new Point(phi, theta, weight);
+
+                    // Update trackers
+                    if (point.x < minX) minX = point.x; if (point.x > maxX) maxX = point.x;
+                    if (point.y < minY) minY = point.y; if (point.y > maxY) maxY = point.y;
+                    if (point.z < minZ) minZ = point.z; if (point.z > maxZ) maxZ = point.z;
+                    if (weight < minW) minW = weight; if (weight > maxW) maxW = weight;
+
+                    points.push(point);
+                }
+            }
+        }
+
+        const boundingBox: BoundingBox3D = { min: { x: minX, y: minY, z: minZ }, max: { x: maxX, y: maxY, z: maxZ } };
+        const weightRange: NumericRange = { min: minW, max: maxW };
+        const item: PointsCacheItem = {
+            data: points,
+            boundingBox,
+            weightRange,
+            id: byOrder ? num : AVAILABLE_POINTS["lebedev"][num],
+            kind: 'lebedev',
+            meta: { byOrder }
+        };
+
+        if (byOrder) {
+            pointCache["lebedev"][num] = item;
+        } else {
+            pointCache["lebedev"][AVAILABLE_POINTS["lebedev"][num]] = item;
+        }
+
+        return item;
+
+    } catch (error: any) {
+        console.warn(`Could not load Lebedev data for N = ${N}: ${error.message}`);
+        return null;
     }
 }
 
@@ -115,104 +239,6 @@ function prod_quad(func: (phi: number, theta: number, ...args: any[]) => number,
     return I / (4 * Math.PI);
 }
 
-function generateMonteCarloUniform(N: number) {
-    let points = [];
-
-    for (let i = 0; i < N; i++) {
-        // Generate uniform random points on unit sphere
-        let u1 = Math.random();
-        let u2 = Math.random();
-
-        let phi = Math.acos(2 * u1 - 1); // Polar angle
-        let theta = 2 * Math.PI * u2;     // Azimuthal angle
-
-        let point = new Point(phi, theta, 1.0 / N);
-
-
-        points.push(point);
-    }
-
-    return points;
-}
-
-function generateMonteCarloClustered(N: number) {
-    let points = [];
-
-    for (let i = 0; i < N; i++) {
-        // Generate points with clustering towards poles
-        let u1 = Math.random();
-        let u2 = Math.random();
-
-        let phi = u1 * Math.PI;           // Uniform in [0, π] - causes clustering
-        let theta = 2 * Math.PI * u2;     // Uniform in [0, 2π]
-
-        let point = new Point(phi, theta, Math.sin(phi) / N);
-
-
-        points.push(point);
-    }
-
-    return points;
-}
-async function generateLebedevPoints(N: number, byOrder: boolean = false) {
-    try {
-        let num: number;
-        let response: Response;
-
-        if (byOrder) {
-            num = Number(Object.values(AVAILABLE_POINTS["lebedev"]).reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev)));
-            if (pointCache["lebedev"][num])
-                return pointCache["lebedev"][num];
-
-            response = await fetch(`PointDistFiles/lebedev/lebedev_${num.toString().padStart(3, '0')}`);
-        } else {
-            num = Number(Object.keys(AVAILABLE_POINTS["lebedev"]).reduce((prev: string, curr: string) => (Math.abs(Number(curr) - N) < Math.abs(Number(prev) - N) ? curr : prev)));
-            for (let key of Object.keys(pointCache["lebedev"])) {
-                let tmpPoints = pointCache["lebedev"][Number(key)];
-                if (tmpPoints.length == num)
-                    return tmpPoints;
-            }
-
-            response = await fetch(`PointDistFiles/lebedev/lebedev_${AVAILABLE_POINTS["lebedev"][num].toString().padStart(3, '0')}`);
-        }
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        let text = await response.text();
-        let lines = text.trim().split('\n');
-
-        let points = [];
-
-        for (let line of lines) {
-            if (line.trim()) {
-                let parts = line.trim().split(/\s+/);
-                if (parts.length >= 3) {
-                    let theta = parseFloat(parts[0]) * Math.PI / 180;
-                    let phi = parseFloat(parts[1]) * Math.PI / 180;
-                    let weight = parseFloat(parts[2]);
-
-                    let point = new Point(phi, theta, weight);
-
-                    points.push(point);
-                }
-            }
-        }
-
-        if (byOrder)
-            pointCache["lebedev"][num] = points;
-        else
-            pointCache["lebedev"][AVAILABLE_POINTS["lebedev"][num]] = points;
-
-        return points;
-
-    } catch (error: any) {
-        console.warn(`Could not load Lebedev data for N = ${N}: ${error.message}`);
-        return null;
-    }
-}
-
 function generateProductQuadrature(N: number) {
     let points: Point[] = [];
 
@@ -237,7 +263,7 @@ async function generateSphericalDesign(
     N: number,
     designType: 'HardinSloane' | 'WomersleySym' | 'WomersleyNonSym' = 'HardinSloane',
     selectBy: 'points' | 'degree' = 'points'
-) {
+): Promise<PointsCacheItem | null> {
     const designMap = AVAILABLE_POINTS[designType] as Record<number, number>; // degree -> points
     const degreeKeys = Object.keys(designMap).map(k => Number(k));
 
@@ -269,6 +295,9 @@ async function generateSphericalDesign(
         let lines = text.trim().split('\n');
 
         let points: Point[] = [];
+        // Bounding box; weight is constant for spherical designs
+        let minX = Number.POSITIVE_INFINITY, minY = Number.POSITIVE_INFINITY, minZ = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY, maxZ = Number.NEGATIVE_INFINITY;
 
         for (let line of lines) {
             if (line.trim()) {
@@ -281,17 +310,35 @@ async function generateSphericalDesign(
                     let phi = Math.acos(z);
                     let theta = Math.atan2(y, x);
 
-                    let point = new Point(phi, theta, 1.0 / lines.length);
+                    const w = 1.0 / lines.length;
+                    let point = new Point(phi, theta, w);
+
+                    // Update bounding box using parsed coordinates (or point.x/y/z, identical within precision)
+                    if (x < minX) minX = x; if (x > maxX) maxX = x;
+                    if (y < minY) minY = y; if (y > maxY) maxY = y;
+                    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
 
                     points.push(point);
                 }
             }
         }
 
-        pointCache[designType][chosenDegree] = points;
+        const boundingBox: BoundingBox3D = { min: { x: minX, y: minY, z: minZ }, max: { x: maxX, y: maxY, z: maxZ } };
+        const constantWeight = points.length > 0 ? points[0].weight : 0;
+        const weightRange: NumericRange = { min: constantWeight, max: constantWeight };
 
-        console.log(`Loaded ${designType} degree ${chosenDegree} with ${points.length} points`);
-        return points;
+        const item: PointsCacheItem = {
+            data: points,
+            boundingBox,
+            weightRange,
+            id: chosenDegree,
+            kind: designType,
+            meta: { selectBy }
+        };
+
+        pointCache[designType][chosenDegree] = item;
+
+        return item;
 
     } catch (error: any) {
         console.warn(`Could not load ${designType} data for degree = ${chosenDegree}: ${error.message}`);
@@ -299,4 +346,4 @@ async function generateSphericalDesign(
     }
 }
 
-export { generateProductQuadrature, generateSphericalDesign, generateMonteCarloUniform, generateMonteCarloClustered, generateLebedevPoints, prod_quad, gaussLegendre, trapezoidal }
+export { generateProductQuadrature, generateSphericalDesign, generateMonteCarloUniform, generateMonteCarloClustered, generateLebedevPoints }

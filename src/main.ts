@@ -13,50 +13,55 @@ import {
 import testFunctions from './test-functions.ts';
 
 import { SPHERE_RADIUS } from './constants.ts';
+import type { NumericRange } from './cache-types.ts';
 
 type QuadPoint = { x?: number | null; y?: number | null; z?: number | null; weight?: number | null; phi?: number | null; theta?: number | null };
 
-type Mode = 'harmonics' | 'function';
 type QuadMethod = 'monte_carlo_uniform' | 'monte_carlo_clustered' | 'lebedev' | 'product' | 'HardinSloane' | 'WomersleySym' | 'WomersleyNonSym';
 type SphereDisplay = 'wireframe' | 'colormap' | 'solid';
 
+// Single source of truth for default app values
+const DEFAULTS = {
+    quadMethod: 'lebedev' as QuadMethod,
+    numPoints: 1,
+    testFunction: () => testFunctions[0],
+    functionParam: 1.0,
+    sphereDisplay: 'colormap' as SphereDisplay,
+    sphereOpacity: 0.8,
+    showPoints: true,
+    autoRotate: true,
+    rotationSpeed: 0.5,
+};
+
 interface AppState {
-    mode: Mode;
     quadMethod: QuadMethod;
     numPoints: number;
-    harmonicL: number;
-    harmonicM: number;
     testFunction: any;
     functionParam: number;
     sphereDisplay: SphereDisplay;
     sphereOpacity: number;
     showPoints: boolean;
-    pointSize: number;
     autoRotate: boolean;
     rotationSpeed: number;
 }
 
 declare global {
     interface Window {
-        currentMode: 'harmonics' | 'function';
         currentQuadMethod: 'monte_carlo_uniform' | 'monte_carlo_clustered' | 'lebedev' | 'product' | 'HardinSloane' | 'WomersleySym' | 'WomersleyNonSym';
         numPoints: number;
-        harmonicL: number;
-        harmonicM: number;
         currentTestFunction: any;
         functionParam: number;
         showSphere: boolean;
         showPoints: boolean;
         showColorMap: boolean;
         wireframe: boolean;
-        pointSize: number;
+
         sphereOpaque: boolean;
         autoRotate: boolean;
         rotationSpeed: number;
         sphereDisplay: 'wireframe' | 'colormap' | 'solid';
         sphereOpacity: number;
         forcePointRecreation?: boolean;
-        harmonicsFolder?: any;
         functionsFolder?: any;
         updateQuadraturePoints?: () => Promise<void>;
         triggerUpdate?: (force?: boolean) => void;
@@ -74,31 +79,17 @@ let sphereGroup: THREE.Group, pointGroup: THREE.Group, surfaceGroup: THREE.Group
 
 let sphereGeometry: THREE.SphereGeometry, sphereMaterial: THREE.MeshLambertMaterial, sphereMesh: THREE.Mesh;
 
-window.currentMode = 'harmonics';
-window.currentQuadMethod = 'monte_carlo_uniform';
-window.numPoints = 100;
-window.harmonicL = 2;
-window.harmonicM = 0;
-window.functionParam = 1.0;
-
-window.showSphere = true;
-window.showPoints = true;
-window.showColorMap = true;
-window.wireframe = false;
-window.pointSize = 6;
-window.sphereOpaque = false;
-
-window.autoRotate = true;
-window.rotationSpeed = 1.0;
+// Window-level state will be initialized from app state via syncStateToWindow()
 
 let quadraturePoints: QuadPoint[] = [];
+let currentWeightRange: NumericRange | null = null;
 
 async function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, 5);
+    camera.position.set(0, 0, 3);
 
     renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -148,7 +139,6 @@ async function init() {
 
     initializeGUI();
 
-    console.log('Initializing with default quadrature points');
     await updateQuadraturePoints();
 
     triggerUpdate();
@@ -179,34 +169,74 @@ function updateQuadratureVisualization(forceRecreate = false) {
     const hasCorrectPointCount = existingPointCount === quadraturePoints.length;
 
     if (!hasCorrectPointCount || forceRecreate) {
-        const reason = forceRecreate ? 'force recreation' : `count mismatch (${existingPointCount} -> ${quadraturePoints.length})`;
-        console.log(`🔄 Recreating points: ${reason}`);
         pointGroup.clear();
 
         if (window.showPoints && quadraturePoints.length > 0) {
-            const pointRadius = (window.pointSize || 6) * 0.01;
+            const Npoints = Math.max(1, quadraturePoints.length);
+            const spacing = Math.sqrt(4 * Math.PI / Npoints);
+            const pointRadius = Math.max(0.002, Math.min(0.04, 0.35 * spacing));
             const pointGeometry = new THREE.SphereGeometry(pointRadius, 8, 6);
-            const pointMaterial = new THREE.MeshLambertMaterial({ color: 0x000000 });
+
+            // Use cached weight range when available; otherwise compute from points
+            const fallbackWeight = 1 / quadraturePoints.length;
+            let minWeight: number;
+            let maxWeight: number;
+            if (currentWeightRange && isFinite(currentWeightRange.min) && isFinite(currentWeightRange.max)) {
+                minWeight = currentWeightRange.min;
+                maxWeight = currentWeightRange.max;
+            } else {
+                let localMin = Number.POSITIVE_INFINITY;
+                let localMax = Number.NEGATIVE_INFINITY;
+                for (const p of quadraturePoints) {
+                    const w = (p.weight ?? fallbackWeight) as number;
+                    if (w < localMin) localMin = w;
+                    if (w > localMax) localMax = w;
+                }
+                if (!isFinite(localMin) || !isFinite(localMax)) {
+                    localMin = fallbackWeight;
+                    localMax = fallbackWeight;
+                }
+                minWeight = localMin;
+                maxWeight = localMax;
+            }
+
+            const lowColor = new THREE.Color(0x1e90ff);   // low weights → blue
+            const highColor = new THREE.Color(0xff4500);  // high weights → orange-red
 
             quadraturePoints.forEach(point => {
-                const pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
-                pointMesh.userData.originalRadius = pointRadius;
                 const px = (point.x ?? 0) as number;
                 const py = (point.y ?? 0) as number;
                 const pz = (point.z ?? 0) as number;
+
+                // Assign color based on weight
+                const w = (point.weight ?? fallbackWeight) as number;
+                const t = maxWeight > minWeight ? (w - minWeight) / (maxWeight - minWeight) : 0.5;
+                const color = lowColor.clone().lerp(highColor, Math.max(0, Math.min(1, t)));
+                // Use per-mesh material to color individually
+                const material = new THREE.MeshLambertMaterial({ color });
+                const pointMesh = new THREE.Mesh(pointGeometry, material);
+                pointMesh.userData.originalRadius = pointRadius;
                 pointMesh.position.set(px, py, pz);
+
+                // Size by weight: scale around base radius
+                const weightScale = 0.6 + 0.8 * t; // [0.6, 1.4]
+                pointMesh.userData.weightScale = weightScale;
+                pointMesh.scale.setScalar(weightScale);
+
                 pointGroup.add(pointMesh);
             });
         }
     } else {
-        console.log('🎨 Updating existing point display properties');
         pointGroup.visible = window.showPoints;
 
         if (window.showPoints) {
-            const newPointRadius = (window.pointSize || 6) * 0.01;
+            const Npoints = Math.max(1, quadraturePoints.length);
+            const spacing = Math.sqrt(4 * Math.PI / Npoints);
+            const newPointRadius = Math.max(0.002, Math.min(0.04, 0.35 * spacing));
             pointGroup.children.forEach(pointMesh => {
                 const originalRadius = pointMesh.userData.originalRadius || 0.06;
-                const scaleFactor = newPointRadius / originalRadius;
+                const weightScale = pointMesh.userData.weightScale ?? 1;
+                const scaleFactor = (newPointRadius / originalRadius) * weightScale;
                 pointMesh.scale.setScalar(scaleFactor);
             });
         }
@@ -253,23 +283,14 @@ function updateSurfaceVisualization() {
 
         let colorValue;
 
-        if (window.currentMode === 'harmonics') {
-            try {
-                const ylm = computeSphericalHarmonic(window.harmonicL, window.harmonicM, theta, phi);
-                colorValue = Math.max(0, Math.min(1, (ylm + maxVal) / (2 * maxVal)));
-            } catch (e) {
-                colorValue = 0.5;
-            }
-        } else if (window.currentMode === 'function') {
-            try {
-                const funcValue = window.currentTestFunction.function(phi, theta, window.functionParam);
-                colorValue = Math.max(0, Math.min(1, (funcValue - minVal) / (maxVal - minVal)));
-            } catch (e) {
-                colorValue = 0.5;
-            }
-        } else {
+
+        try {
+            const funcValue = window.currentTestFunction.function(phi, theta, window.functionParam);
+            colorValue = Math.max(0, Math.min(1, (funcValue - minVal) / (maxVal - minVal)));
+        } catch (e) {
             colorValue = 0.5;
         }
+
 
         if (colorValue < 0.5) {
             colors[i] = 0;
@@ -321,23 +342,10 @@ function updateInfoPanelIfNeeded() {
     }
 }
 
-function getSphericalHarmonicDisplayName(l: number, m: number) {
-    const subscriptDigits = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
-    const superscriptDigits = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
-
-    const lStr = l.toString();
-    const subscript = lStr.split('').map(digit => subscriptDigits[parseInt(digit)]).join('');
-
-    const absM = Math.abs(m);
-    const mStr = absM.toString();
-    const superscript = mStr.split('').map(digit => superscriptDigits[parseInt(digit)]).join('');
-    const finalSuperscript = m >= 0 ? superscript : `⁻${superscript}`;
-
-    return `Y${subscript}${finalSuperscript}`;
-}
+// Removed spherical harmonics utilities
 
 function getEffectiveNumPointsFromState(state: typeof appState) {
-    const desired = state.numPoints || 100;
+    const desired = state.numPoints || 1;
     const minPoints = Math.max(1, desired);
     const maxPoints = Math.min(10000, minPoints);
     return maxPoints;
@@ -357,11 +365,7 @@ function updateInfoPanel() {
     content += `<div class="info-section">`;
     content += `<div class="info-header">📊 System Status</div>`;
 
-    const modeNames = {
-        'harmonics': '🌐 Spherical Harmonics',
-        'function': '📈 Function Integration'
-    };
-    content += `<div class="info-row"><span class="info-label">Mode:</span> ${modeNames[window.currentMode] || window.currentMode}</div>`;
+    content += `<div class="info-row"><span class="info-label">Mode:</span> 📈 Function Integration</div>`;
 
     const quadNames = {
         'monte_carlo_uniform': 'Monte Carlo (Uniform)',
@@ -401,26 +405,18 @@ function updateInfoPanel() {
     content += `</div>`;
 
 
-    if (window.currentMode === 'harmonics') {
-        content += `<div class="info-section">`;
-        content += `<div class="info-header">🌐 Spherical Harmonic</div>`;
-        const harmonicName = getSphericalHarmonicDisplayName(window.harmonicL, window.harmonicM);
-        content += `<div class="info-row"><span class="info-label">Function:</span> ${harmonicName}(θ,φ)</div>`;
-        content += `<div class="info-row"><span class="info-label">Degree (ℓ):</span> ${window.harmonicL}</div>`;
-        content += `<div class="info-row"><span class="info-label">Order (m):</span> ${window.harmonicM}</div>`;
-        content += `</div>`;
-    } else if (window.currentMode === 'function') {
-        content += `<div class="info-section">`;
-        content += `<div class="info-header">📈 Test Function</div>`;
-        const tfName = window.currentTestFunction.name;
-        const tfDesc = window.currentTestFunction.description;
-        content += `<div class="info-row"><span class="info-label">Function:</span> ${tfName}</div>`;
-        if (tfDesc) {
-            content += `<div class="info-row"><span class="info-label">Details:</span> <span class="info-detail">${tfDesc}</span></div>`;
-        }
-        content += `<div class="info-row"><span class="info-label">Parameter:</span> ${window.functionParam.toFixed(3)}</div>`;
-        content += `</div>`;
+
+    content += `<div class="info-section">`;
+    content += `<div class="info-header">📈 Test Function</div>`;
+    const tfName = window.currentTestFunction.name;
+    const tfDesc = window.currentTestFunction.description;
+    content += `<div class="info-row"><span class="info-label">Function:</span> ${tfName}</div>`;
+    if (tfDesc) {
+        content += `<div class="info-row"><span class="info-label">Details:</span> <span class="info-detail">${tfDesc}</span></div>`;
     }
+    content += `<div class="info-row"><span class="info-label">Parameter:</span> ${window.functionParam.toFixed(3)}</div>`;
+    content += `</div>`;
+
 
     const integrationResults = computeIntegrationResults();
     if (integrationResults) {
@@ -440,81 +436,19 @@ function computeIntegrationResults() {
     let analyticalValue: number | null = null;
 
     try {
-        if (window.currentMode === 'function') {
-            let sumWeighted = 0;
-            let sumWeights = 0;
-            const N = quadraturePoints.length;
+        const N = quadraturePoints.length;
 
-            for (let i = 0; i < N; i++) {
-                const point = quadraturePoints[i];
-                const xVal = point.x ?? 0;
-                const yVal = point.y ?? 0;
-                const zVal = point.z ?? 0;
-                const denom = Math.sqrt(xVal * xVal + yVal * yVal + zVal * zVal) || 1;
-                const phi = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal / denom)));
-                const theta = point.theta != null ? point.theta : Math.atan2(yVal, xVal);
-                const funcValue = window.currentTestFunction.function(phi, theta, window.functionParam);
-                const weight = point.weight ?? 1 / N;
-                if (window.currentQuadMethod === 'lebedev' || window.currentQuadMethod === 'product') {
-                    numericalValue += funcValue * weight;
-                } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
-                    // Clustered MC uses non-uniform sampling; use provided weights for weighted average
-                    sumWeighted += funcValue * weight;
-                    sumWeights += weight;
-                } else {
-                    // Uniform MC and spherical designs → simple average
-                    sumWeighted += funcValue;
-                    sumWeights += 1;
-                }
-            }
-
-            if (window.currentQuadMethod === 'lebedev' || window.currentQuadMethod === 'product') {
-                numericalValue = numericalValue / (4 * Math.PI);
-            } else {
-                numericalValue = sumWeighted / (sumWeights || 1);
-            }
-
-            analyticalValue = window.currentTestFunction.analyticalValue(window.functionParam);
-            if (analyticalValue !== null) {
-                analyticalValue = analyticalValue / (4 * Math.PI);
-            }
-        } else if (window.currentMode === 'harmonics') {
-            let sumWeighted = 0;
-            let sumWeights = 0;
-            const N = quadraturePoints.length;
-
-            for (let i = 0; i < N; i++) {
-                const point = quadraturePoints[i];
-                const xVal2 = point.x ?? 0;
-                const yVal2 = point.y ?? 0;
-                const zVal2 = point.z ?? 0;
-                const denom2 = Math.sqrt(xVal2 * xVal2 + yVal2 * yVal2 + zVal2 * zVal2) || 1;
-                const phi2 = point.phi != null ? point.phi : Math.acos(Math.max(-1, Math.min(1, zVal2 / denom2)));
-                const theta2 = point.theta != null ? point.theta : Math.atan2(yVal2, xVal2);
-                const ylm = computeSphericalHarmonic(window.harmonicL, window.harmonicM, theta2, phi2);
-                const weight = point.weight ?? 1 / N;
-                if (window.currentQuadMethod === 'lebedev' || window.currentQuadMethod === 'product') {
-                    numericalValue += ylm * weight;
-                } else if (window.currentQuadMethod === 'monte_carlo_clustered') {
-                    sumWeighted += ylm * weight;
-                    sumWeights += weight;
-                } else {
-                    sumWeighted += ylm;
-                    sumWeights += 1;
-                }
-            }
-
-            if (window.currentQuadMethod === 'lebedev' || window.currentQuadMethod === 'product') {
-                numericalValue = numericalValue / (4 * Math.PI);
-            } else {
-                numericalValue = sumWeighted / (sumWeights || 1);
-            }
-
-            analyticalValue = (window.harmonicL === 0 && window.harmonicM === 0) ? 1 / (4 * Math.PI) : 0;
+        for (let i = 0; i < N; i++) {
+            const point = quadraturePoints[i];
+            const funcValue = window.currentTestFunction.function(point.phi, point.theta, window.functionParam);
+            const weight = point.weight ?? 1 / N;
+            numericalValue += funcValue * weight;
         }
 
-        content += `<div class="info-row"><span class="info-label">Numerical:</span> <span class="numerical-value">${numericalValue.toExponential(6)}</span></div>`;
+        analyticalValue = window.currentTestFunction.analyticalValue(window.functionParam);
 
+        content += `<div class="info-row"><span class="info-label">Numerical:</span> <span class="numerical-value">${numericalValue.toExponential(6)}</span></div>`;
+        
         if (analyticalValue !== null) {
             content += `<div class="info-row"><span class="info-label">Analytical:</span> <span class="analytical-value">${analyticalValue.toExponential(6)}</span></div>`;
 
@@ -555,7 +489,6 @@ let needsInfoPanelUpdate = false;
 
 async function updateVisualizationIfNeeded() {
     if (needsUpdate) {
-        console.log('Updating visualization...');
         await updateQuadraturePoints();
         updateQuadratureVisualization(window.forcePointRecreation || false);
         updateSurfaceVisualization();
@@ -563,7 +496,6 @@ async function updateVisualizationIfNeeded() {
         needsInfoPanelUpdate = true;
         needsUpdate = false;
         window.forcePointRecreation = false;
-        console.log('Visualization update complete');
     }
 }
 
@@ -592,42 +524,57 @@ function triggerUpdate(forcePointRecreation = false) {
 
 
 async function updateQuadraturePoints() {
-    const desiredPoints = window.numPoints;
     const calculationPoints = getEffectiveNumPoints();
-
-    if (desiredPoints === calculationPoints) {
-        console.log(`Updating quadrature points: method=${window.currentQuadMethod}, points=${desiredPoints}`);
-    } else {
-        console.log(`Updating quadrature points: method=${window.currentQuadMethod}, desired=${desiredPoints} → calculation=${calculationPoints}`);
-    }
 
     let points: QuadPoint[] | null = null;
 
     try {
         switch (window.currentQuadMethod) {
             case 'monte_carlo_uniform':
-                console.log('🎲 Generating Monte Carlo Uniform points');
                 points = generateMonteCarloUniform(calculationPoints);
+                currentWeightRange = { min: 1 / calculationPoints, max: 1 / calculationPoints };
                 break;
             case 'monte_carlo_clustered':
-                console.log('🎲 Generating Monte Carlo Clustered points');
                 points = generateMonteCarloClustered(calculationPoints);
+                // Weights are sin(phi)/N, so range is approximately [0, 1/N]
+                currentWeightRange = { min: 0, max: 1 / calculationPoints };
                 break;
             case 'lebedev':
-                console.log('📊 Loading Lebedev points...');
-                points = await generateLebedevPoints(calculationPoints);
+                {
+                    const item = await generateLebedevPoints(calculationPoints);
+                    points = item?.data ?? null;
+                    currentWeightRange = item?.weightRange ?? null;
+                }
                 break;
             case 'product':
                 points = generateProductQuadrature(calculationPoints);
+                // Compute exact min/max once since not cached
+                if (points && points.length > 0) {
+                    let minW = Number.POSITIVE_INFINITY;
+                    let maxW = Number.NEGATIVE_INFINITY;
+                    for (const p of points) {
+                        const w = (p.weight ?? 0) as number;
+                        if (w < minW) minW = w;
+                        if (w > maxW) maxW = w;
+                    }
+                    currentWeightRange = { min: minW, max: maxW };
+                } else {
+                    currentWeightRange = null;
+                }
                 break;
             case 'HardinSloane':
             case 'WomersleySym':
             case 'WomersleyNonSym':
-                points = await generateSphericalDesign(calculationPoints, window.currentQuadMethod);
+                {
+                    const item = await generateSphericalDesign(calculationPoints, window.currentQuadMethod);
+                    points = item?.data ?? null;
+                    currentWeightRange = item?.weightRange ?? null;
+                }
                 break;
             default:
                 console.warn(`Unknown quadrature method: ${window.currentQuadMethod}, using Monte Carlo uniform`);
                 points = generateMonteCarloUniform(calculationPoints);
+                currentWeightRange = { min: 1 / calculationPoints, max: 1 / calculationPoints };
         }
 
         if (!points || points.length === 0) {
@@ -643,7 +590,7 @@ async function updateQuadraturePoints() {
             phi: p.phi ?? undefined,
             theta: p.theta ?? undefined,
         }));
-        console.log(`Generated ${quadraturePoints.length} points using ${window.currentQuadMethod}`);
+
 
     } catch (error) {
         console.error(`Error generating quadrature points for ${window.currentQuadMethod}:`, error);
@@ -659,37 +606,29 @@ function onWindowResize() {
 }
 
 const appState: AppState = {
-    mode: 'harmonics',
-    quadMethod: 'monte_carlo_uniform',
-    numPoints: 100,
+    quadMethod: DEFAULTS.quadMethod,
+    numPoints: DEFAULTS.numPoints,
 
-    harmonicL: 2,
-    harmonicM: 0,
+    testFunction: DEFAULTS.testFunction(),
+    functionParam: DEFAULTS.functionParam,
 
-    testFunction: testFunctions[0],
-    functionParam: 1.0,
+    sphereDisplay: DEFAULTS.sphereDisplay,
+    sphereOpacity: DEFAULTS.sphereOpacity,
+    showPoints: DEFAULTS.showPoints,
 
-    sphereDisplay: 'colormap',
-    sphereOpacity: 1.0,
-    showPoints: true,
-    pointSize: 6,
-
-    autoRotate: true,
-    rotationSpeed: 1.0
+    autoRotate: DEFAULTS.autoRotate,
+    rotationSpeed: DEFAULTS.rotationSpeed
 };
 
 function syncStateToWindow() {
-    window.currentMode = appState.mode;
     window.currentQuadMethod = appState.quadMethod;
     window.numPoints = appState.numPoints;
-    window.harmonicL = appState.harmonicL;
-    window.harmonicM = appState.harmonicM;
     window.currentTestFunction = appState.testFunction;
     window.functionParam = appState.functionParam;
     window.sphereDisplay = appState.sphereDisplay;
     window.sphereOpacity = appState.sphereOpacity;
     window.showPoints = appState.showPoints;
-    window.pointSize = appState.pointSize;
+
 
     window.showSphere = appState.sphereDisplay !== 'wireframe' ? true : true;
     window.wireframe = appState.sphereDisplay === 'wireframe';
@@ -700,11 +639,8 @@ function syncStateToWindow() {
 }
 
 function syncWindowToState() {
-    if (window.currentMode) appState.mode = window.currentMode as Mode;
     if (window.currentQuadMethod) appState.quadMethod = window.currentQuadMethod as QuadMethod;
     if (typeof window.numPoints === 'number') appState.numPoints = window.numPoints;
-    if (typeof window.harmonicL === 'number') appState.harmonicL = window.harmonicL;
-    if (typeof window.harmonicM === 'number') appState.harmonicM = window.harmonicM;
     if (window.currentTestFunction) {
         const candidate = window.currentTestFunction as any;
         if (typeof candidate === 'string') {
@@ -720,19 +656,19 @@ function syncWindowToState() {
     if (window.sphereDisplay) appState.sphereDisplay = window.sphereDisplay as SphereDisplay;
     if (typeof window.sphereOpacity === 'number') appState.sphereOpacity = window.sphereOpacity;
     if (typeof window.showPoints === 'boolean') appState.showPoints = window.showPoints;
-    if (typeof window.pointSize === 'number') appState.pointSize = window.pointSize;
+
     if (typeof window.autoRotate === 'boolean') appState.autoRotate = window.autoRotate;
     if (typeof window.rotationSpeed === 'number') appState.rotationSpeed = window.rotationSpeed;
 }
 
 const QUADRATURE_AFFECTING_PROPERTIES = [
-    'mode', 'quadMethod', 'numPoints',
-    'harmonicL', 'harmonicM', 'testFunction', 'functionParam'
+    'quadMethod', 'numPoints',
+    'testFunction', 'functionParam'
 ];
 
 const INFO_PANEL_AFFECTING_PROPERTIES = [
     'quadMethod', 'numPoints',
-    'mode', 'harmonicL', 'harmonicM', 'testFunction', 'functionParam'
+    'testFunction', 'functionParam'
 ];
 
 function updateState(updates: Partial<typeof appState>) {
@@ -768,20 +704,13 @@ function updateState(updates: Partial<typeof appState>) {
         const actuallyNeedsRegeneration =
             oldEffectivePoints !== newEffectivePoints ||
             oldState.quadMethod !== appState.quadMethod ||
-            oldState.mode !== appState.mode ||
-            oldState.harmonicL !== appState.harmonicL ||
-            oldState.harmonicM !== appState.harmonicM ||
             oldState.testFunction !== appState.testFunction ||
             oldState.functionParam !== appState.functionParam;
 
         if (actuallyNeedsRegeneration) {
-            console.log(`🔄 Effective points changed: ${oldEffectivePoints} → ${newEffectivePoints}, regenerating...`);
             triggerUpdate(true);
-        } else {
-            console.log(`🎯 Desired points changed but effective points unchanged (${newEffectivePoints}), skipping regeneration`);
         }
     } else {
-        console.log('🎨 Display-only change detected, updating visualization...');
         updateQuadratureVisualization();
         updateSurfaceVisualization();
         updateSphereAppearance();
@@ -791,31 +720,19 @@ function updateState(updates: Partial<typeof appState>) {
 function validateStateUpdates(updates: Partial<AppState>) {
     const validated: Partial<AppState> = { ...updates };
 
-    if ('harmonicL' in validated || 'harmonicM' in validated) {
-        const newL = validated.harmonicL !== undefined ? validated.harmonicL : appState.harmonicL;
-        const newM = validated.harmonicM !== undefined ? validated.harmonicM : appState.harmonicM;
-
-        validated.harmonicM = Math.min(Math.abs(newM), newL);
-        validated.harmonicL = Math.max(0, newL);
-    }
+    // Removed spherical harmonics constraints
 
     if ('functionParam' in validated && typeof validated.functionParam === 'number') {
         validated.functionParam = Math.max(0.1, Math.min(10, validated.functionParam));
     }
 
-    if ('pointSize' in validated && typeof validated.pointSize === 'number') {
-        validated.pointSize = Math.max(1, Math.min(20, validated.pointSize));
-    }
+
 
     if ('rotationSpeed' in validated && typeof validated.rotationSpeed === 'number') {
         validated.rotationSpeed = Math.max(0.1, Math.min(3, validated.rotationSpeed));
     }
 
-    if ('mode' in validated) {
-        if (validated.mode !== 'harmonics' && validated.mode !== 'function') {
-            validated.mode = 'harmonics';
-        }
-    }
+    // Removed mode switching (harmonics removed)
 
     // Normalize testFunction input: accept string ids from GUI and map to full object
     if ('testFunction' in validated) {
@@ -850,17 +767,14 @@ function syncStateToGUI() {
     }
 
     try {
-        settings.mode = appState.mode;
         settings.quadMethod = appState.quadMethod;
         settings.numPoints = appState.numPoints;
-        settings.harmonicL = appState.harmonicL;
-        settings.harmonicM = appState.harmonicM;
         settings.testFunction = (appState.testFunction as any)?.value;
         settings.functionParam = appState.functionParam;
         settings.sphereDisplay = appState.sphereDisplay;
         settings.sphereOpacity = appState.sphereOpacity;
         settings.showPoints = appState.showPoints;
-        settings.pointSize = appState.pointSize;
+
         settings.autoRotate = appState.autoRotate;
         settings.rotationSpeed = appState.rotationSpeed;
 
@@ -886,12 +800,6 @@ window.addEventListener('keydown', (event: KeyboardEvent) => {
     if (target && target.tagName === 'INPUT') return;
 
     switch (event.key) {
-        case '1':
-            setAppState({ mode: 'harmonics' });
-            break;
-        case '2':
-            setAppState({ mode: 'function' });
-            break;
         case ' ':
             event.preventDefault();
             setAppState({ autoRotate: !appState.autoRotate });
@@ -940,12 +848,8 @@ window.addEventListener('resize', onWindowResize);
 let gui: any;
 
 const settings: any = {
-    mode: appState.mode,
     quadMethod: appState.quadMethod,
     numPoints: appState.numPoints,
-
-    harmonicL: appState.harmonicL,
-    harmonicM: appState.harmonicM,
 
     testFunction: (appState.testFunction as any)?.value,
     functionParam: appState.functionParam,
@@ -953,37 +857,20 @@ const settings: any = {
     sphereDisplay: appState.sphereDisplay,
     sphereOpacity: appState.sphereOpacity,
     showPoints: appState.showPoints,
-    pointSize: appState.pointSize,
 
     autoRotate: appState.autoRotate,
     rotationSpeed: appState.rotationSpeed,
 };
 
-function updateModeSpecificFolderVisibility(mode: 'harmonics' | 'function') {
-    if (window.harmonicsFolder && window.functionsFolder) {
-        const showHarmonics = mode === 'harmonics';
-        const showFunctions = mode === 'function';
-
-        window.harmonicsFolder.domElement.style.display = showHarmonics ? 'block' : 'none';
-        window.functionsFolder.domElement.style.display = showFunctions ? 'block' : 'none';
-
-        console.log(`Spherical Harmonics folder: ${showHarmonics ? 'shown' : 'hidden'}`);
-        console.log(`Test Functions folder: ${showFunctions ? 'shown' : 'hidden'}`);
+function updateModeSpecificFolderVisibility(_mode: 'harmonics' | 'function') {
+    if (window.functionsFolder) {
+        window.functionsFolder.domElement.style.display = 'block';
     }
 }
 
 function initializeGUI() {
     gui = new lilGui({ width: 350 });
     gui.title('3D Spherical Quadrature');
-
-    const vizFolder = gui.addFolder('Visualization');
-    vizFolder.add(settings, 'mode', {
-        'Spherical Harmonics': 'harmonics',
-        'Test Function': 'function'
-    }).name('Mode').onChange((value: 'harmonics' | 'function') => {
-        updateState({ mode: value });
-        updateModeSpecificFolderVisibility(value);
-    });
 
     const quadFolder = gui.addFolder('Quadrature Method');
     quadFolder.add(settings, 'quadMethod', {
@@ -1002,21 +889,7 @@ function initializeGUI() {
         updateState({ numPoints: value });
     });
 
-    const harmonicsFolder = gui.addFolder('Spherical Harmonics');
-    window.harmonicsFolder = harmonicsFolder;
-    harmonicsFolder.add(settings, 'harmonicL', 0, 10, 1).name('ℓ (degree)').onChange((value: number) => {
-        const newM = Math.min(settings.harmonicM, value);
-        updateState({ harmonicL: value, harmonicM: newM });
-
-        mController.max(value);
-        if (newM !== settings.harmonicM) {
-            mController.updateDisplay();
-        }
-    });
-
-    const mController = harmonicsFolder.add(settings, 'harmonicM', 0, 2, 1).name('m (order)').onChange((value: number) => {
-        updateState({ harmonicM: value });
-    });
+    // Removed spherical harmonics controls
 
     const functionsFolder = gui.addFolder('Test Functions');
     window.functionsFolder = functionsFolder;
@@ -1061,9 +934,7 @@ function initializeGUI() {
         updateState({ showPoints: value });
     });
 
-    displayFolder.add(settings, 'pointSize', 1, 20, 1).name('Point Size').onChange((value: number) => {
-        updateState({ pointSize: value });
-    });
+    // Removed manual point size control; automatic scaling is used instead
 
     const animationFolder = gui.addFolder('Animation');
     animationFolder.add(settings, 'autoRotate').name('Auto Rotate').onChange((value: boolean) => {
@@ -1074,18 +945,14 @@ function initializeGUI() {
         updateState({ rotationSpeed: value });
     });
 
-    vizFolder.open();
     displayFolder.open();
     animationFolder.open();
-    harmonicsFolder.open();
     functionsFolder.open();
 
-    console.log('Syncing state to GUI...');
     syncStateToGUI();
 
-    updateModeSpecificFolderVisibility(settings.mode);
+    updateModeSpecificFolderVisibility('function');
 
-    console.log('GUI initialization complete');
 }
 
 
