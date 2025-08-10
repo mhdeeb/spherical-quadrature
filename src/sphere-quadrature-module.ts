@@ -223,8 +223,10 @@ const gaussLegendre = (fn: (x: number, ...args: any[]) => number, a: number, b: 
 function trapezoidal(fn: (x: number, ...args: any[]) => number, a: number, b: number, n: number, ...args: any[]) {
     let h = (b - a) / n;
     let s = fn(a, ...args) + fn(b, ...args);
+
     for (let i = 1; i < n; i++)
         s += 2 * fn(a + i * h, ...args);
+
     return (h / 2) * s;
 }
 
@@ -240,20 +242,23 @@ function prod_quad(func: (phi: number, theta: number, ...args: any[]) => number,
 }
 
 function generateProductQuadrature(N: number) {
-    let points: Point[] = [];
-
     N = Math.round(Math.sqrt(N / 2));
-
     let M = 2 * N + 1;
 
-    let { x: phiPoints, w: weights } = gaussLegendrePoints(N);
+    let points: Point[] = [];
 
-    let phi = phiPoints.map(phi => 0.5 * Math.PI * phi + 0.5 * Math.PI).flatMap(phi => Array(M).fill(phi));
-    let theta = Array.from({ length: N }, () => Array.from({ length: M }, (_, i) => (2 * Math.PI / (M - 1)) * i)).flat();
+    let theta_sample = Array.from({ length: M }, (_, i) => i * 2 * Math.PI / M);
+    let theta_weights = Array.from({ length: M }, (_, i) => (i == 0 || i == M - 1 ? 1 : 2) * Math.PI / M);
+    let { x: phi_sample, w: phi_weights } = gaussLegendrePoints(N);
 
-    for (let i = 0; i < phi.length; i++) {
-        let point = new Point(phi[i], theta[i], weights[i]);
-        points.push(point);
+    phi_sample = phi_sample.map(x => Math.PI * (x + 1) / 2);
+    phi_weights = phi_weights.map(w => w * Math.sin(w) * Math.PI / 2);
+
+    for (let i = 0; i < theta_sample.length; i++) {
+        for (let j = 0; j < phi_sample.length; j++) {
+            let point = new Point(phi_sample[j], theta_sample[i], phi_weights[j] * theta_weights[i]);
+            points.push(point);
+        }
     }
 
     return points;
@@ -346,4 +351,4 @@ async function generateSphericalDesign(
     }
 }
 
-export { generateProductQuadrature, generateSphericalDesign, generateMonteCarloUniform, generateMonteCarloClustered, generateLebedevPoints }
+export { generateProductQuadrature, generateSphericalDesign, generateMonteCarloUniform, generateMonteCarloClustered, generateLebedevPoints, prod_quad, gaussLegendrePoints }

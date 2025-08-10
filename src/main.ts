@@ -8,6 +8,7 @@ import {
     generateProductQuadrature,
     generateLebedevPoints,
     generateSphericalDesign,
+    prod_quad,
 } from './sphere-quadrature-module.ts';
 
 import testFunctions from './test-functions.ts';
@@ -22,12 +23,12 @@ type SphereDisplay = 'wireframe' | 'colormap' | 'solid';
 
 // Single source of truth for default app values
 const DEFAULTS = {
-    quadMethod: 'lebedev' as QuadMethod,
-    numPoints: 1,
+    quadMethod: 'product' as QuadMethod,
+    numPoints: 1600,
     testFunction: () => testFunctions[0],
     functionParam: 1.0,
-    sphereDisplay: 'colormap' as SphereDisplay,
-    sphereOpacity: 0.8,
+    sphereDisplay: 'solid' as SphereDisplay,
+    sphereOpacity: 1,
     showPoints: true,
     autoRotate: true,
     rotationSpeed: 0.5,
@@ -154,9 +155,9 @@ function createBaseSphere() {
     sphereGeometry = new THREE.SphereGeometry(SPHERE_RADIUS, 64, 32);
 
     sphereMaterial = new THREE.MeshLambertMaterial({
-        color: 0xcccccc,
+        color: 'white',
         transparent: true,
-        opacity: 0.3,
+        opacity: 1,
         wireframe: window.wireframe
     });
 
@@ -175,7 +176,7 @@ function updateQuadratureVisualization(forceRecreate = false) {
             const Npoints = Math.max(1, quadraturePoints.length);
             const spacing = Math.sqrt(4 * Math.PI / Npoints);
             const pointRadius = Math.max(0.002, Math.min(0.04, 0.35 * spacing));
-            const pointGeometry = new THREE.SphereGeometry(pointRadius, 8, 6);
+            const pointGeometry = new THREE.SphereGeometry(pointRadius, 16, 12);
 
             // Use cached weight range when available; otherwise compute from points
             const fallbackWeight = 1 / quadraturePoints.length;
