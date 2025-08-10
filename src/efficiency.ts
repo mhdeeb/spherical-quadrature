@@ -25,9 +25,7 @@ import { AVAILABLE_POINTS } from './constants.ts';
 const config = {
     testFunction: 'f1',
     functionParam: 9,
-    sphericalDesignType: 'HardinSloane',
-    maxPoints: 8700,
-    plotType: 'loglog'
+    maxPoints: 5780,
 };
 
 // GUI instance
@@ -155,20 +153,6 @@ function initializeGUI() {
             updatePlots();
             updateStats();
         });
-
-    // Visualization Settings Folder
-    const vizFolder = gui.addFolder('📈 Visualization');
-    vizFolder.open();
-
-    vizFolder.add(config, 'plotType', {
-        'Log-Log Scale': 'loglog',
-        'Linear Scale': 'linear'
-    })
-        .name('Plot Scale')
-        .onChange(() => {
-            updatePlots();
-        });
-
     // Store references for updates
     window.testFunctionFolder = testFunctionFolder;
 }
@@ -380,10 +364,6 @@ async function calculateErrorData() {
             const pts = generateProductQuadrature(N) as any[];
             const approx = integrateNormalized(pts as any);
             const size = pts.length;
-
-            // const approx = prod_quad(tf.function, N, 2 * N + 1, aParam);
-            // const size = N;
-
             const error = Math.abs(approx - analyticalVal);
             analysisData.product.points.push(size);
             analysisData.product.errors.push(error);
@@ -441,13 +421,14 @@ async function calculateErrorData() {
 // Update plots
 function updatePlots() {
     // Always update both plots simultaneously
-    drawEfficiencyPlot(analysisData, colors, { plotType: config.plotType as 'loglog' | 'linear' });
+    drawEfficiencyPlot(analysisData, colors);
 
     let functionKey = config.testFunction;
     if (functionKey.includes(' - ')) {
         functionKey = functionKey.split(' - ')[0].replace('₁', '1').replace('₂', '2').replace('₃', '3').replace('₄', '4').replace('₅', '5');
     }
-    drawErrorPlot(analysisData, colors, config.plotType as 'loglog' | 'linear', functionKey);
+
+    drawErrorPlot(analysisData, colors, functionKey);
 }
 
 // Update efficiency plot

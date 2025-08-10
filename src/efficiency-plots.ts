@@ -13,11 +13,7 @@ type AnalysisData = {
 
 type Colors = Record<string, string>;
 
-type Config = {
-    plotType: 'loglog' | 'linear';
-};
-
-export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors, _config: Config) {
+export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors) {
     const traces: any[] = [];
 
     const efficiencyPlotDiv = document.getElementById('efficiency-plot');
@@ -31,8 +27,8 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors,
             y: analysisData.lebedev.efficiencies,
             mode: 'lines+markers',
             name: 'Lebedev',
-            line: { color: colors.lebedev, width: 3 },
-            marker: { size: 8, symbol: 'x' }
+            line: { color: colors.lebedev, width: 4, shape: 'linear' },
+            marker: { size: 8 }
         });
     }
 
@@ -42,8 +38,9 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors,
             y: analysisData.HardinSloane.efficiencies,
             mode: 'lines+markers',
             name: 'Spherical Design (Hardin–Sloane)',
-            line: { color: colors.hardinSloane, width: 3 },
-            marker: { size: 8, symbol: 'x', color: colors.hardinSloane }
+            line: { color: colors.hardinSloane, width: 4, shape: 'linear' },
+            marker: { size: 8, color: colors.hardinSloane },
+            visible: 'legendonly',
         });
     }
 
@@ -53,8 +50,8 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors,
             y: analysisData.WomersleySym.efficiencies,
             mode: 'lines+markers',
             name: 'Spherical Design (Womersley Sym)',
-            line: { color: colors.womersleySym, width: 3 },
-            marker: { size: 8, symbol: 'x', color: colors.womersleySym }
+            line: { color: colors.womersleySym, width: 4, shape: 'linear' },
+            marker: { size: 8, color: colors.womersleySym }
         });
     }
 
@@ -64,8 +61,8 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors,
             y: analysisData.WomersleyNonSym.efficiencies,
             mode: 'lines+markers',
             name: 'Spherical Design (Womersley NonSym)',
-            line: { color: colors.womersleyNonSym, width: 3 },
-            marker: { size: 8, symbol: 'x', color: colors.womersleyNonSym },
+            line: { color: colors.womersleyNonSym, width: 4, shape: 'linear' },
+            marker: { size: 8, color: colors.womersleyNonSym },
             visible: 'legendonly'
         });
     }
@@ -76,8 +73,8 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors,
             y: analysisData.product.efficiencies,
             mode: 'lines+markers',
             name: 'Gaussian Product',
-            line: { color: colors.product, width: 3, dash: 'dash' },
-            marker: { size: 6, symbol: 'diamond', color: colors.product }
+            line: { color: colors.product, width: 4, dash: 'dash', shape: 'linear' },
+            marker: { size: 6, color: colors.product }
         });
     }
 
@@ -87,8 +84,8 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors,
             y: analysisData.monteCarlo.efficiencies,
             mode: 'lines+markers',
             name: 'Monte Carlo',
-            line: { color: colors.monteCarlo1, width: 3 },
-            marker: { size: 6, symbol: 'circle', color: colors.monteCarlo1 }
+            line: { color: colors.monteCarlo1, width: 4, shape: 'linear' },
+            marker: { size: 6, color: colors.monteCarlo1 }
         });
     }
 
@@ -99,29 +96,29 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors,
             y: mc.efficiencies,
             mode: 'lines+markers',
             name: 'Monte Carlo (Clustered)',
-            line: { color: colors.monteCarlo2, width: 3, dash: 'dot' },
-            marker: { size: 6, symbol: 'circle-open', color: colors.monteCarlo2 }
+            line: { color: colors.monteCarlo2, width: 4, dash: 'dot', shape: 'linear' },
+            marker: { size: 6, color: colors.monteCarlo2 }
         });
     }
 
     const layout: any = {
-        xaxis: { title: { text: 'Polynomial Degree (p)', font: { size: 14, color: '#2c3e50' } }, gridcolor: '#e8e8e8', autorange: true, showgrid: true, zeroline: false },
-        yaxis: { title: { text: 'Efficiency Factor (E)', font: { size: 14, color: '#2c3e50' } }, gridcolor: '#e8e8e8', autorange: true, showgrid: true, zeroline: false },
+        xaxis: { title: { text: 'Polynomial Degree (p)', font: { size: 14, color: '#2c3e50' } }, gridcolor: '#e8e8e8', autorange: true, showgrid: false, zeroline: false },
+        yaxis: { title: { text: 'Efficiency Factor (E)', font: { size: 14, color: '#2c3e50' } }, gridcolor: '#e8e8e8', range: [0, 1.1], showgrid: false, zeroline: false },
         plot_bgcolor: 'rgba(248, 249, 250, 0.8)',
         paper_bgcolor: 'transparent',
         font: { family: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif', color: '#2c3e50' },
-        legend: { xanchor: 'right', yanchor: 'bottom', x: 0.99, y: 0.02, bgcolor: 'rgba(255, 255, 255, 0.9)', bordercolor: '#ddd', borderwidth: 1, font: { size: 12 } },
+        legend: { xanchor: 'right', yanchor: 'bottom', x: 0.99, y: 0.02, bgcolor: 'rgba(255, 255, 255, 0.9)', bordercolor: '#ddd', borderwidth: 4, font: { size: 12 } },
         margin: { l: 60, r: 20, t: 20, b: 60 },
         hovermode: 'x unified',
-        showlegend: true
+        showlegend: true,
     };
 
-    const plotConfig: any = { responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'], toImageButtonOptions: { format: 'png', filename: 'efficiency_analysis', height: 600, width: 800 } };
+    const plotConfig: any = { responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'], toImageButtonOptions: { format: 'png', filename: 'efficiency_analysis', height: 600, width: 800,  } };
 
     Plotly.newPlot('efficiency-plot', traces, layout, plotConfig);
 }
 
-export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plotType: 'loglog' | 'linear', functionKey: string) {
+export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, functionKey: string) {
     const traces: any[] = [];
 
     const errorPlotDiv = document.getElementById('error-plot');
@@ -135,8 +132,8 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plot
             y: analysisData.lebedev.errors,
             mode: 'lines+markers',
             name: 'Lebedev',
-            line: { color: colors.lebedev, width: 3 },
-            marker: { size: 8, symbol: 'x' }
+            line: { color: colors.lebedev, width: 4, shape: 'linear' },
+            marker: { size: 8 }
         });
     }
 
@@ -146,8 +143,9 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plot
             y: analysisData.HardinSloane.errors,
             mode: 'lines+markers',
             name: 'Spherical Design (Hardin–Sloane)',
-            line: { color: colors.hardinSloane, width: 3 },
-            marker: { size: 8, symbol: 'x', color: colors.hardinSloane }
+            line: { color: colors.hardinSloane, width: 4, shape: 'linear' },
+            marker: { size: 8, color: colors.hardinSloane },
+            visible: 'legendonly',
         });
     }
 
@@ -157,9 +155,8 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plot
             y: analysisData.WomersleySym.errors,
             mode: 'lines+markers',
             name: 'Spherical Design (Womersley Sym)',
-            line: { color: colors.womersleySym, width: 3 },
-            marker: { size: 8, symbol: 'x', color: colors.womersleySym },
-            visible: 'legendonly'
+            line: { color: colors.womersleySym, width: 4, shape: 'linear' },
+            marker: { size: 8, color: colors.womersleySym },
         });
     }
 
@@ -169,8 +166,8 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plot
             y: analysisData.WomersleyNonSym.errors,
             mode: 'lines+markers',
             name: 'Spherical Design (Womersley NonSym)',
-            line: { color: colors.womersleyNonSym, width: 3 },
-            marker: { size: 8, symbol: 'x', color: colors.womersleyNonSym },
+            line: { color: colors.womersleyNonSym, width: 4, shape: 'linear' },
+            marker: { size: 8, color: colors.womersleyNonSym },
             visible: 'legendonly'
         });
     }
@@ -181,8 +178,8 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plot
             y: analysisData.product.errors,
             mode: 'lines+markers',
             name: 'Gaussian Product',
-            line: { color: colors.product, width: 3 },
-            marker: { size: 6, symbol: 'diamond' }
+            line: { color: colors.product, width: 4, shape: 'linear' },
+            marker: { size: 6 }
         });
     }
 
@@ -192,8 +189,8 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plot
             y: analysisData.monteCarlo.errors,
             mode: 'lines+markers',
             name: 'Monte Carlo (Uniform)',
-            line: { color: colors.monteCarlo1, width: 3 },
-            marker: { size: 8, symbol: 'circle' }
+            line: { color: colors.monteCarlo1, width: 4, shape: 'linear' },
+            marker: { size: 8 }
         });
     }
 
@@ -204,19 +201,18 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plot
             y: mc.errors,
             mode: 'lines+markers',
             name: 'Monte Carlo (Clustered)',
-            line: { color: colors.monteCarlo2, width: 3, dash: 'dot' },
-            marker: { size: 8, symbol: 'circle-open' }
+            line: { color: colors.monteCarlo2, width: 4, dash: 'dot', shape: 'linear' },
+            marker: { size: 8 }
         });
     }
 
-    const isLogScale = plotType === 'loglog';
     const layout: any = {
-        xaxis: { title: { text: 'Number of Points (N)', font: { size: 14, color: '#2c3e50' } }, gridcolor: '#e8e8e8', type: isLogScale ? 'log' : 'linear', showgrid: true, zeroline: false, autorange: true },
-        yaxis: { title: { text: `Integration Error [${functionKey.toUpperCase()}]`, font: { size: 14, color: '#2c3e50' } }, gridcolor: '#e8e8e8', type: isLogScale ? 'log' : 'linear', showgrid: true, zeroline: false, exponentformat: 'power', autorange: true },
+        xaxis: { title: { text: 'Number of Points (N)', font: { size: 14, color: '#2c3e50' } }, gridcolor: '#e8e8e8', type: 'log', showgrid: false, zeroline: false, autorange: true },
+        yaxis: { title: { text: `Integration Error [${functionKey.toUpperCase()}]`, font: { size: 14, color: '#2c3e50' } }, gridcolor: '#e8e8e8', type: 'log', showgrid: false, zeroline: false, exponentformat: 'power', autorange: true },
         plot_bgcolor: 'rgba(248, 249, 250, 0.8)',
         paper_bgcolor: 'transparent',
         font: { family: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif', color: '#2c3e50' },
-        legend: { xanchor: 'left', yanchor: 'bottom', x: 0.01, y: 0.02, bgcolor: 'rgba(255, 255, 255, 0.9)', bordercolor: '#ddd', borderwidth: 1, font: { size: 12 } },
+        legend: { xanchor: 'left', yanchor: 'bottom', x: 0.01, y: 0.02, bgcolor: 'rgba(255, 255, 255, 0.9)', bordercolor: '#ddd', borderwidth: 4, font: { size: 12 } },
         margin: { l: 60, r: 20, t: 20, b: 60 },
         hovermode: 'x unified',
         showlegend: true,
@@ -226,5 +222,3 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, plot
 
     Plotly.newPlot('error-plot', traces, layout, plotConfig);
 }
-
-
