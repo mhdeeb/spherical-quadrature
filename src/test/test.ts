@@ -1,5 +1,5 @@
-import { prod_quad, generateProductQuadrature } from "./sphere-quadrature-module.ts";
-import testFunctions from "./test-functions.ts";
+import { prod_quad, generateProductQuadrature } from "../sphere-quadrature-module.ts";
+import testFunctions from "../test-functions.ts";
 
 let N = 10;
 

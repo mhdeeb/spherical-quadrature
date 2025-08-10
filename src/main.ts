@@ -8,7 +8,6 @@ import {
     generateProductQuadrature,
     generateLebedevPoints,
     generateSphericalDesign,
-    prod_quad,
 } from './sphere-quadrature-module.ts';
 
 import testFunctions from './test-functions.ts';

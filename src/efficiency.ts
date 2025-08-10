@@ -4,7 +4,6 @@ import {
     generateMonteCarloUniform,
     generateMonteCarloClustered,
     generateProductQuadrature,
-    prod_quad,
 } from './sphere-quadrature-module.ts';
 
 import testFunctions from './test-functions.ts';
