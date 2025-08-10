@@ -242,24 +242,28 @@ function prod_quad(func: (phi: number, theta: number, ...args: any[]) => number,
 }
 
 function generateProductQuadrature(N: number) {
+    let points: Point[] = [];
+
     N = Math.round(Math.sqrt(N / 2));
     let M = 2 * N + 1;
 
-    let points: Point[] = [];
+    let { x: phiPoints, w: phiWeights } = gaussLegendrePoints(N);
+    phiPoints = phiPoints.map(x => (Math.PI) * (x + 1) / 2);
+    phiWeights = phiWeights.map(w => (Math.PI / 2) * w);
 
-    let theta_sample = Array.from({ length: M }, (_, i) => i * 2 * Math.PI / M);
-    let theta_weights = Array.from({ length: M }, (_, i) => (i == 0 || i == M - 1 ? 1 : 2) * Math.PI / M);
-    let { x: phi_sample, w: phi_weights } = gaussLegendrePoints(N);
+    phiWeights = phiWeights.map((w, i) => w * Math.sin(phiPoints[i]));
 
-    phi_sample = phi_sample.map(x => Math.PI * (x + 1) / 2);
-    phi_weights = phi_weights.map(w => w * Math.sin(w) * Math.PI / 2);
-
-    for (let i = 0; i < theta_sample.length; i++) {
-        for (let j = 0; j < phi_sample.length; j++) {
-            let point = new Point(phi_sample[j], theta_sample[i], phi_weights[j] * theta_weights[i]);
-            points.push(point);
-        }
+    let thetaPoints: number[] = [];
+    let thetaWeights: number[] = [];
+    const h = (2 * Math.PI) / M;
+    for (let j = 0; j < M; j++) {
+        thetaPoints.push(j * h);
+        thetaWeights.push(h);
     }
+
+    for (let i = 0; i < N; i++)
+        for (let j = 0; j < M; j++)
+            points.push(new Point(phiPoints[i], thetaPoints[j], (thetaWeights[j] * phiWeights[i]) / (4 * Math.PI)));
 
     return points;
 }

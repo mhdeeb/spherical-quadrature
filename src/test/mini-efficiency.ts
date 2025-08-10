@@ -12,29 +12,13 @@ const colors = {
 
 const config = {
     testFunction: 'f1',
-    functionParam: 12,
-    maxInternalN: 40, // internal Gauss-Legendre order for prod_quad; point count ≈ (2N+1)N
+    functionParam: 9,
+    maxInternalN: 15, // internal Gauss-Legendre order for prod_quad; point count ≈ (2N+1)N
 };
 
 function resolveTestFunction() {
     const tf = (testFunctions as any[]).find(t => t.value === config.testFunction) || (testFunctions as any[])[0];
     return tf as { function: (phi: number, theta: number, a: number) => number; analyticalValue: (a: number) => number; name: string };
-}
-
-function integrateNormalizedFromPoints(points: Array<{ phi?: number; theta?: number; weight?: number }>, fn: (phi: number, theta: number, a: number) => number, a: number) {
-    if (!points || points.length === 0) return NaN;
-    let sumW = 0;
-    let sumWF = 0;
-    const N = points.length;
-    for (let i = 0; i < N; i++) {
-        const p = points[i] as any;
-        const w = (typeof p.weight === 'number' && isFinite(p.weight)) ? (p.weight as number) : 1 / N;
-        const phi = (p.phi ?? 0) as number;
-        const theta = (p.theta ?? 0) as number;
-        sumW += w;
-        sumWF += w * fn(phi, theta, a);
-    }
-    return sumWF / sumW;
 }
 
 async function computeAndPlot() {
@@ -54,7 +38,11 @@ async function computeAndPlot() {
 
         const desiredPoints = (2 * N + 1) * N;
         const pts = generateProductQuadrature(desiredPoints) as any[];
-        const Ipts = integrateNormalizedFromPoints(pts as any, tf.function, a);
+        let Ipts = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const p = pts[i] as any;
+            Ipts += p.weight * tf.function(p.phi, p.theta, a);
+        }
         const ePts = Math.abs(Ipts - Itrue);
 
         xPoints.push(pts.length);
