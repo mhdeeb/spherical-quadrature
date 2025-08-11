@@ -64,10 +64,14 @@ const colors: Record<string, string> = {
     monteCarlo2: '#000000'          // Black (clustered, dashed in plot)
 };
 
+function Integrate(func: (phi: number, theta: number, ...args: any[]) => number, points: Array<{ phi?: number | null; theta?: number | null; weight?: number | null }>, ...args: any[]): number {
+    return points.reduce((sum, pt) => {
+        return sum + func(pt.phi!, pt.theta!, ...args) * pt.weight!;
+    }, 0);
+};
+
 // Initialize the application
 async function init() {
-
-
     try {
         initializeGUI();
 
@@ -134,14 +138,14 @@ function initializeGUI() {
     };
     const testFunctionOptions: Record<string, string> = {};
     testFunctions.forEach((tf: any, idx: number) => {
-        const label = `f${toSubscript(idx + 1)} - ${tf.name}`;
+        const label = `f${toSubscript(idx + 1)}: ${tf.name}`;
         testFunctionOptions[label] = tf.value;
     });
 
     testFunctionFolder.add(config, 'testFunction', testFunctionOptions)
         .name('Test Function')
         .onChange(async () => {
-            await calculateErrorData();
+            await loadAnalysisData();
             updatePlots();
             updateStats();
         });
@@ -149,7 +153,7 @@ function initializeGUI() {
     testFunctionFolder.add(config, 'functionParam', 1, 20, 1)
         .name('Parameter (a)')
         .onChange(async () => {
-            await calculateErrorData();
+            await loadAnalysisData();
             updatePlots();
             updateStats();
         });
@@ -159,10 +163,8 @@ function initializeGUI() {
 
 
 
-// Load and calculate analysis data
+// Load and calculate analysis data (efficiency + error)
 async function loadAnalysisData() {
-
-
     // Show loading state
     showLoadingState(true);
 
@@ -178,10 +180,116 @@ async function loadAnalysisData() {
             monteCarloClustered: { degrees: [], points: [], efficiencies: [], errors: [] },
         };
 
-        // Calculate both efficiency and error data for all methods
-        await calculateEfficiencyData();
-        await calculateErrorData();
+        // Resolve test function using id-style config (same approach as main.ts)
+        const tf = (testFunctions as any[]).find((t: any) => t.value === config.testFunction) || (testFunctions as any[])[1];
+        const aParam = config.functionParam;
+        const analyticalVal = tf.analyticalValue(aParam);
 
+        // 1) Lebedev: compute efficiency and errors across entries, sorted by points
+        try {
+            const lebedevEntries = Object.entries(AVAILABLE_POINTS.lebedev)
+                .map(([pointsStr, degree]) => ({ points: Number(pointsStr), degree: Number(degree) }))
+                .filter(({ points }) => points <= config.maxPoints)
+                .sort((a, b) => a.points - b.points);
+
+            for (const { points, degree } of lebedevEntries) {
+                const efficiency = Math.min(1, ((degree + 1) * (degree + 1)) / (3 * points));
+                analysisData.lebedev.degrees.push(degree);
+                analysisData.lebedev.points.push(points);
+                analysisData.lebedev.efficiencies.push(efficiency);
+
+                try {
+                    const item = await generateLebedevPoints(points);
+                    const pts = item?.data ?? [];
+                    const approx = Integrate(tf.function, pts as any, aParam);
+                    const error = Math.max(Math.abs(approx - analyticalVal), 1e-16);
+                    analysisData.lebedev.errors.push(error);
+                } catch (err) {
+                    console.warn('Failed computing Lebedev errors:', err);
+                }
+            }
+        } catch (err) {
+            console.warn('Failed computing Lebedev analysis:', err);
+        }
+
+        // 2) Spherical Designs: compute for all three families
+        const designFamilies: SphericalDesignType[] = ['HardinSloane', 'WomersleySym', 'WomersleyNonSym'];
+        for (const fam of designFamilies) {
+            try {
+                const designMap = AVAILABLE_POINTS[fam] as Record<number, number>;
+                const entries = Object.entries(designMap)
+                    .map(([pointsStr, degree]) => ({ points: Number(pointsStr), degree: Number(degree) }))
+                    .filter(({ points }) => points <= config.maxPoints)
+                    .sort((a, b) => a.points - b.points);
+
+                for (const { points, degree } of entries) {
+                    const efficiency = Math.min(1, ((degree + 1) * (degree + 1)) / (3 * points));
+                    (analysisData as any)[fam].degrees.push(degree);
+                    (analysisData as any)[fam].points.push(points);
+                    (analysisData as any)[fam].efficiencies.push(efficiency);
+
+                    try {
+                        const item = await generateSphericalDesign(points, fam);
+                        const pts = item?.data ?? [];
+                        const approx = Integrate(tf.function, pts as any, aParam);
+                        const error = Math.max(Math.abs(approx - analyticalVal), 1e-16);
+                        (analysisData as any)[fam].errors.push(error);
+                    } catch (err) {
+                        console.warn(`Failed computing ${fam} errors:`, err);
+                    }
+                }
+            } catch (err) {
+                console.warn(`Failed computing ${fam} analysis:`, err);
+            }
+        }
+
+        // 3) Product quadrature: sweep internal N via points formula until maxPoints
+        try {
+            for (let n = 1; n <= config.maxPoints; n *= 2) {
+                const pts = generateProductQuadrature(n) as any[];
+                const approx = Integrate(tf.function, pts as any, aParam);
+                const error = Math.max(Math.abs(approx - analyticalVal), 1e-16);
+                analysisData.product.points.push(pts.length);
+                analysisData.product.errors.push(error);
+                analysisData.product.efficiencies.push(2 / 3);
+                analysisData.product.degrees.push(Math.floor(Math.sqrt(2 * n) - 1));
+            }
+        } catch (err) {
+            console.warn('Failed computing Product Quadrature errors:', err);
+        }
+
+        // 4) Monte Carlo
+        try {
+            for (let n = 1; n <= config.maxPoints; n *= 2) {
+                const ptsClustered = generateMonteCarloClustered(n) as any[];
+                const approxClustered = Integrate(tf.function, ptsClustered as any, aParam);
+                const errorClustered = Math.max(Math.abs(approxClustered - analyticalVal), 1e-16);
+                analysisData.monteCarloClustered.points.push(ptsClustered.length);
+                analysisData.monteCarloClustered.errors.push(errorClustered);
+
+                const ptsUniform = generateMonteCarloUniform(n) as any[];
+                const approxUniform = Integrate(tf.function, ptsUniform as any, aParam);
+                const errorUniform = Math.max(Math.abs(approxUniform - analyticalVal), 1e-16);
+                analysisData.monteCarlo.points.push(ptsUniform.length);
+                analysisData.monteCarlo.errors.push(errorUniform);
+            }
+
+            if (analysisData.monteCarlo.points.at(-1)! < config.maxPoints) {
+                const ptsClustered = generateMonteCarloClustered(config.maxPoints) as any[];
+                const approxClustered = Integrate(tf.function, ptsClustered as any, aParam);
+                const errorClustered = Math.max(Math.abs(approxClustered - analyticalVal), 1e-16);
+                analysisData.monteCarloClustered.points.push(ptsClustered.length);
+                analysisData.monteCarloClustered.errors.push(errorClustered);
+
+                const ptsUniform = generateMonteCarloUniform(config.maxPoints) as any[];
+                const approxUniform = Integrate(tf.function, ptsUniform as any, aParam);
+                const errorUniform = Math.max(Math.abs(approxUniform - analyticalVal), 1e-16);
+                analysisData.monteCarlo.points.push(ptsUniform.length);
+                analysisData.monteCarlo.errors.push(errorUniform);
+            }
+        } catch (err) {
+            console.warn('Failed computing Monte Carlo (Clustered) errors:', err);
+        }
 
     } catch (error) {
         console.error('❌ Failed to load analysis data:', error);
@@ -191,243 +299,11 @@ async function loadAnalysisData() {
     }
 }
 
-// Calculate efficiency factors based on McLaren (1963)
-async function calculateEfficiencyData() {
-    // Clear existing efficiency data only (preserve errors for now)
-    analysisData.lebedev.degrees = [];
-    analysisData.lebedev.points = [];
-    analysisData.lebedev.efficiencies = [];
-
-    analysisData.HardinSloane.degrees = [];
-    analysisData.HardinSloane.points = [];
-    analysisData.HardinSloane.efficiencies = [];
-    analysisData.WomersleySym.degrees = [];
-    analysisData.WomersleySym.points = [];
-    analysisData.WomersleySym.efficiencies = [];
-    analysisData.WomersleyNonSym.degrees = [];
-    analysisData.WomersleyNonSym.points = [];
-    analysisData.WomersleyNonSym.efficiencies = [];
-
-    analysisData.product.degrees = [];
-    analysisData.product.points = [];
-    analysisData.product.efficiencies = [];
-
-    // 1) Lebedev: mapping is points -> degree
-    try {
-        const lebedevEntries = Object.entries(AVAILABLE_POINTS.lebedev)
-            .map(([pointsStr, degree]) => ({ points: Number(pointsStr), degree: Number(degree) }))
-            .filter(({ points }) => points <= config.maxPoints)
-            .sort((a, b) => a.degree - b.degree);
-
-        for (const { points, degree } of lebedevEntries) {
-            const efficiency = ((degree + 1) * (degree + 1)) / (3 * points);
-            analysisData.lebedev.degrees.push(degree);
-            analysisData.lebedev.points.push(points);
-            analysisData.lebedev.efficiencies.push(Math.min(1, efficiency));
-        }
-    } catch (err) {
-        console.warn('Failed computing Lebedev efficiencies:', err);
-    }
-
-    // 2) Spherical Designs: compute for all three families
-    const designFamilies: SphericalDesignType[] = ['HardinSloane', 'WomersleySym', 'WomersleyNonSym'];
-    for (const fam of designFamilies) {
-        try {
-            const designMap = AVAILABLE_POINTS[fam] as Record<number, number>;
-            const entries = Object.entries(designMap)
-                .map(([pointsStr, degree]) => ({ points: Number(pointsStr), degree: Number(degree) }))
-                .filter(({ points }) => points <= config.maxPoints)
-                .sort((a, b) => a.degree - b.degree);
-
-            for (const { points, degree } of entries) {
-                const efficiency = Math.min(1, ((degree + 1) * (degree + 1)) / (3 * points));
-                analysisData[fam].degrees.push(degree);
-                analysisData[fam].points.push(points);
-                analysisData[fam].efficiencies.push(efficiency);
-            }
-        } catch (err) {
-            console.warn(`Failed computing ${fam} efficiencies:`, err);
-        }
-    }
-
-    // 3) Product quadrature: internal N inferred from points: points ≈ (2N+1) * N, degree ≈ N
-    analysisData.product.degrees.push(1);
-    analysisData.product.efficiencies.push(2 / 3);
-    analysisData.product.degrees.push(Math.max(
-        analysisData.lebedev.degrees[analysisData.lebedev.degrees.length - 1] || 1,
-        analysisData.HardinSloane.degrees[analysisData.HardinSloane.degrees.length - 1] || 1,
-        analysisData.WomersleySym.degrees[analysisData.WomersleySym.degrees.length - 1] || 1,
-        analysisData.WomersleyNonSym.degrees[analysisData.WomersleyNonSym.degrees.length - 1] || 1,
-    ));
-    analysisData.product.efficiencies.push(2 / 3);
-}
-
-// Calculate integration errors for test functions
-async function calculateErrorData() {
-    // Helper to fetch test function by config key
-    const resolveTestFunction = () => {
-        // config.testFunction may be a shorthand like 'f2' or a label like 'f₂ - Gaussian Peaks'
-        let key = config.testFunction;
-        if (key.includes(' - ')) {
-            key = key.split(' - ')[0].replace('₁', '1').replace('₂', '2').replace('₃', '3').replace('₄', '4').replace('₅', '5');
-        }
-        const tf = (testFunctions as any[]).find((t: any) => t.value === key) || (testFunctions as any[])[1];
-        return tf as { function: (phi: number, theta: number, a: number) => number; analyticalValue: (a: number) => number };
-    };
-
-    const tf = resolveTestFunction();
-    const aParam = config.functionParam;
-
-    // Reset errors and points for all methods
-    analysisData.lebedev.errors = [];
-    analysisData.lebedev.points = [];
-    analysisData.HardinSloane.errors = [];
-    analysisData.HardinSloane.points = [];
-    analysisData.WomersleySym.errors = [];
-    analysisData.WomersleySym.points = [];
-    analysisData.WomersleyNonSym.errors = [];
-    analysisData.WomersleyNonSym.points = [];
-    analysisData.product.errors = [];
-    analysisData.product.points = [];
-    analysisData.monteCarlo.errors = [];
-    analysisData.monteCarlo.points = [];
-    analysisData.monteCarloClustered.errors = [];
-    analysisData.monteCarloClustered.points = [];
-
-    const analyticalVal = tf.analyticalValue(aParam);
-
-    // Utility: compute normalized integral (average over sphere) from points with weights
-    const integrateNormalized = (points: Array<{ phi?: number | null; theta?: number | null; weight?: number | null }>) => {
-        if (!points || points.length === 0) return NaN;
-        let sumW = 0;
-        let sumWF = 0;
-        const N = points.length;
-        for (let i = 0; i < N; i++) {
-            const p = points[i];
-            const w = (typeof p.weight === 'number' && isFinite(p.weight)) ? (p.weight as number) : 1 / N;
-            const phi = (p.phi ?? 0) as number;
-            const theta = (p.theta ?? 0) as number;
-            const f = tf.function(phi, theta, aParam);
-            sumW += w;
-            sumWF += w * f;
-        }
-        if (sumW === 0) return NaN;
-        return sumWF / sumW;
-    };
-
-    // 1) Lebedev errors across available point counts (<= maxPoints)
-    try {
-        const lebedevEntries = Object.entries(AVAILABLE_POINTS.lebedev)
-            .map(([pointsStr, degree]) => ({ points: Number(pointsStr), degree: Number(degree) }))
-            .filter(({ points }) => points <= config.maxPoints)
-            .sort((a, b) => a.points - b.points);
-
-        for (const { points } of lebedevEntries) {
-            if (points > config.maxPoints) break;
-
-            const item = await generateLebedevPoints(points);
-            const pts = item?.data ?? [];
-            const approx = integrateNormalized(pts as any);
-            const error = Math.abs(approx - analyticalVal);
-            analysisData.lebedev.points.push(pts.length);
-            analysisData.lebedev.errors.push(error);
-        }
-    } catch (err) {
-        console.warn('Failed computing Lebedev errors:', err);
-    }
-
-    // 2) Spherical Design errors across available point counts (<= maxPoints) for all families
-    for (const fam of ['HardinSloane', 'WomersleySym', 'WomersleyNonSym'] as SphericalDesignType[]) {
-        try {
-            const designMap = AVAILABLE_POINTS[fam] as Record<number, number>;
-            const allPoints = Object.keys(designMap)
-                .map(n => Number(n))
-                .filter(points => Number.isFinite(points) && points > 0 && points <= config.maxPoints)
-                .sort((a, b) => a - b);
-
-            for (const points of allPoints) {
-                const item = await generateSphericalDesign(points, fam, 'points');
-                const pts = item?.data ?? [];
-                const approx = integrateNormalized(pts as any);
-                const error = Math.abs(approx - analyticalVal);
-                (analysisData as any)[fam].points.push(pts.length);
-                (analysisData as any)[fam].errors.push(error);
-            }
-        } catch (err) {
-            console.warn(`Failed computing ${fam} Spherical Design errors:`, err);
-        }
-    }
-
-    // 3) Product quadrature: sweep internal N via points formula until maxPoints
-    try {
-        for (let N = 1; N < config.maxPoints; N *= 2) {
-            const pts = generateProductQuadrature(N) as any[];
-            const approx = integrateNormalized(pts as any);
-            const size = pts.length;
-            const error = Math.abs(approx - analyticalVal);
-            analysisData.product.points.push(size);
-            analysisData.product.errors.push(error);
-        }
-    } catch (err) {
-        console.warn('Failed computing Product errors:', err);
-    }
-
-    // 4) Monte Carlo (Uniform): logarithmic sweep up to maxPoints
-    try {
-        const mcPoints: number[] = [];
-        // start at 1 and double up to maxPoints, also include maxPoints if not exact power of two
-        for (let n = 1; n <= config.maxPoints; n *= 2) {
-            mcPoints.push(n);
-            if (n === 0) break; // safety
-        }
-        if (mcPoints.length === 0 || mcPoints[mcPoints.length - 1] !== config.maxPoints) {
-            mcPoints.push(config.maxPoints);
-        }
-
-        for (const n of mcPoints) {
-            const pts = generateMonteCarloUniform(n) as any[];
-            const approx = integrateNormalized(pts as any);
-            const error = Math.abs(approx - analyticalVal);
-            analysisData.monteCarlo.points.push(pts.length);
-            analysisData.monteCarlo.errors.push(error);
-        }
-    } catch (err) {
-        console.warn('Failed computing Monte Carlo errors:', err);
-    }
-
-    // 5) Monte Carlo (Clustered): same sweep
-    try {
-        const mcPoints: number[] = [];
-        for (let n = 1; n <= config.maxPoints; n *= 2) {
-            mcPoints.push(n);
-            if (n === 0) break;
-        }
-        if (mcPoints.length === 0 || mcPoints[mcPoints.length - 1] !== config.maxPoints) {
-            mcPoints.push(config.maxPoints);
-        }
-
-        for (const n of mcPoints) {
-            const pts = generateMonteCarloClustered(n) as any[];
-            const approx = integrateNormalized(pts as any);
-            const error = Math.abs(approx - analyticalVal);
-            analysisData.monteCarloClustered.points.push(pts.length);
-            analysisData.monteCarloClustered.errors.push(error);
-        }
-    } catch (err) {
-        console.warn('Failed computing Clustered Monte Carlo errors:', err);
-    }
-}
-
 // Update plots
 function updatePlots() {
     // Always update both plots simultaneously
     drawEfficiencyPlot(analysisData, colors);
-
-    let functionKey = config.testFunction;
-    if (functionKey.includes(' - ')) {
-        functionKey = functionKey.split(' - ')[0].replace('₁', '1').replace('₂', '2').replace('₃', '3').replace('₄', '4').replace('₅', '5');
-    }
-
+    const functionKey = config.testFunction; // already the id style like 'f1'
     drawErrorPlot(analysisData, colors, functionKey);
 }
 

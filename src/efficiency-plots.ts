@@ -73,7 +73,7 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors)
             y: analysisData.product.efficiencies,
             mode: 'lines+markers',
             name: 'Gaussian Product',
-            line: { color: colors.product, width: 4, dash: 'dash', shape: 'linear' },
+            line: { color: colors.product, width: 4, shape: 'linear' },
             marker: { size: 6, color: colors.product }
         });
     }
@@ -96,7 +96,7 @@ export function updateEfficiencyPlot(analysisData: AnalysisData, colors: Colors)
             y: mc.efficiencies,
             mode: 'lines+markers',
             name: 'Monte Carlo (Clustered)',
-            line: { color: colors.monteCarlo2, width: 4, dash: 'dot', shape: 'linear' },
+            line: { color: colors.monteCarlo2, width: 4, shape: 'linear' },
             marker: { size: 6, color: colors.monteCarlo2 }
         });
     }
@@ -201,7 +201,7 @@ export function updateErrorPlot(analysisData: AnalysisData, colors: Colors, func
             y: mc.errors,
             mode: 'lines+markers',
             name: 'Monte Carlo (Clustered)',
-            line: { color: colors.monteCarlo2, width: 4, dash: 'dot', shape: 'linear' },
+            line: { color: colors.monteCarlo2, width: 4, shape: 'linear' },
             marker: { size: 8 }
         });
     }
