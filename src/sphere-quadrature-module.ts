@@ -60,7 +60,7 @@ function generateMonteCarloClustered(N: number) {
         let phi = u1 * Math.PI;           // Uniform in [0, π] - causes clustering
         let theta = 2 * Math.PI * u2;     // Uniform in [0, 2π]
 
-        let point = new Point(phi, theta, Math.sin(phi) / N);
+        let point = new Point(phi, theta, 1.0 / N);
 
 
         points.push(point);
