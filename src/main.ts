@@ -448,7 +448,7 @@ function computeIntegrationResults() {
         analyticalValue = window.currentTestFunction.analyticalValue(window.functionParam);
 
         content += `<div class="info-row"><span class="info-label">Numerical:</span> <span class="numerical-value">${numericalValue.toExponential(6)}</span></div>`;
-        
+
         if (analyticalValue !== null) {
             content += `<div class="info-row"><span class="info-label">Analytical:</span> <span class="analytical-value">${analyticalValue.toExponential(6)}</span></div>`;
 
@@ -536,8 +536,7 @@ async function updateQuadraturePoints() {
                 break;
             case 'monte_carlo_clustered':
                 points = generateMonteCarloClustered(calculationPoints);
-                // Weights are sin(phi)/N, so range is approximately [0, 1/N]
-                currentWeightRange = { min: 0, max: 1 / calculationPoints };
+                currentWeightRange = { min: 1 / calculationPoints, max: 1 / calculationPoints };
                 break;
             case 'lebedev':
                 {
