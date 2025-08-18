@@ -362,7 +362,7 @@ function showLoadingState(isLoading: boolean) {
             if (!plotDiv) return;
             plotDiv.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #74b9ff;">
-                    <div style="font-size: 1.2em; margin-bottom: 20px;">⏳ Loading analysis data...</div>
+                    <div style="font-size: 1.2em; margin-bottom: 20px;">⏳ Loading analysis data, this will take a while...</div>
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: 0%; animation: loadingProgress 2s ease-in-out infinite;"></div>
                     </div>
