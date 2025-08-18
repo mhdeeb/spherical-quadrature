@@ -47,6 +47,10 @@ canvas {
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     font-family: 'Segoe UI', 'Arial', sans-serif;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    /* align-items: center; */
 }
 
 .info-panel h4 {
@@ -184,6 +188,10 @@ canvas {
     overflow-y: auto;
     z-index: 1000;
     box-shadow: -6px 0 20px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .visualization-area {
@@ -362,7 +370,22 @@ canvas {
     color: #c0c0c0;
 }
 
+.navigate-button {
+    background-color: #343434;
+    padding: 1rem 2rem;
+    border-radius: 10px;
+    font-size: 2em;
+    text-decoration: none;
+    color: #4fc3f7;
+    border: 2px solid #4fc3f7;
+    box-shadow: rgba(50, 50, 93, 0.25) 0px 50px 100px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px;
+    transition: all 100ms;
+    text-align: center;
 
+    &:hover {
+        transform: scale(1.02);
+    }
+}
 
 /* Responsive design */
 @media (max-width: 1200px) {

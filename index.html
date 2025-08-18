@@ -1,26 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/typescript.svg" />
     <title>3D Spherical Quadrature Visualization</title>
-    <link rel="stylesheet" href="/styles/stylesheet.css">
-</head>
+    <link rel="stylesheet" href="/styles/stylesheet.css" />
+  </head>
 
-<body>
+  <body>
     <div class="container">
-        <div class="canvas-container" id="canvas-container">
-            <div class="info-panel" id="infoPanel">
-                <h4>3D Spherical Quadrature</h4>
-                <p>Interactive 3D visualization of numerical integration methods on the unit sphere using Three.js.</p>
-                <div id="dynamicInfo"></div>
-            </div>
+      <div class="canvas-container" id="canvas-container">
+        <div class="info-panel" id="infoPanel">
+          <h4>3D Spherical Quadrature</h4>
+          <p>
+            Interactive 3D visualization of numerical integration methods on the
+            unit sphere using Three.js.
+          </p>
+          <div id="dynamicInfo"></div>
+          <a class="navigate-button" href="/grad/efficiency.html" role="button">Efficiency</a>
         </div>
+      </div>
     </div>
-
     <script type="module" src="/src/main.ts"></script>
-</body>
-
+  </body>
 </html>

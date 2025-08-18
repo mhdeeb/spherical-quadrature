@@ -1,87 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spherical Quadrature Efficiency Analysis</title>
-    <link rel="stylesheet" href="/styles/stylesheet.css">
-</head>
+    <link rel="stylesheet" href="/styles/stylesheet.css" />
+  </head>
 
-<body>
+  <body>
     <div class="container">
-        <div class="controls-panel">
-            <div id="gui-container"></div>
+      <div class="controls-panel">
+        <div id="gui-container"></div>
 
-            <div class="stats-panel">
-                <h3>📈 Current Analysis</h3>
-                <div class="stats-grid">
-                    <div class="stat-item">
-                        <div class="stat-value" id="total-methods">0</div>
-                        <div class="stat-label">Methods</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="max-efficiency">0.00</div>
-                        <div class="stat-label">Max Efficiency</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="min-error">1e+0</div>
-                        <div class="stat-label">Min Error</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="total-points">0</div>
-                        <div class="stat-label">Total Points</div>
-                    </div>
-                </div>
-
-                <div class="method-legend">
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #D55E00;"></div><span>Lebedev</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #0072B2;"></div><span>Spherical Design
-                            (Hardin–Sloane)</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #009E73;"></div><span>Spherical Design (Womersley
-                            Sym)</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #CC79A7;"></div><span>Spherical Design (Womersley
-                            NonSym)</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #E69F00;"></div><span>Gaussian Product</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #56B4E9;"></div><span>Monte Carlo</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #000000;"></div><span>Monte Carlo
-                            (Clustered)</span>
-                    </div>
-                </div>
+        <div class="stats-panel">
+          <h3>📈 Current Analysis</h3>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-value" id="total-methods">0</div>
+              <div class="stat-label">Methods</div>
             </div>
+            <div class="stat-item">
+              <div class="stat-value" id="max-efficiency">0.00</div>
+              <div class="stat-label">Max Efficiency</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="min-error">1e+0</div>
+              <div class="stat-label">Min Error</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="total-points">0</div>
+              <div class="stat-label">Total Points</div>
+            </div>
+          </div>
+
+          <div class="method-legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background: #d55e00"></div>
+              <span>Lebedev</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #0072b2"></div>
+              <span>Spherical Design (Hardin–Sloane)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #009e73"></div>
+              <span>Spherical Design (Womersley Sym)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #cc79a7"></div>
+              <span>Spherical Design (Womersley NonSym)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #e69f00"></div>
+              <span>Gaussian Product</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #56b4e9"></div>
+              <span>Monte Carlo</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #000000"></div>
+              <span>Monte Carlo (Clustered)</span>
+            </div>
+          </div>
         </div>
 
-        <div class="visualization-area">
-            <div class="plot-container">
-                <h2>📊 Efficiency Factor Analysis</h2>
-                <div class="plot-area">
-                    <div id="efficiency-plot" class="loading">Loading efficiency data...</div>
-                </div>
-            </div>
+        <a class="navigate-button" href="grad" role="button"
+          >Go to Render</a
+        >
+      </div>
 
-            <div class="plot-container">
-                <h2>📈 Integration Error Comparison</h2>
-                <div class="plot-area">
-                    <div id="error-plot" class="loading">Loading error analysis...</div>
-                </div>
+      <div class="visualization-area">
+        <div class="plot-container">
+          <h2>📊 Efficiency Factor Analysis</h2>
+          <div class="plot-area">
+            <div id="efficiency-plot" class="loading">
+              Loading efficiency data...
             </div>
+          </div>
         </div>
+
+        <div class="plot-container">
+          <h2>📈 Integration Error Comparison</h2>
+          <div class="plot-area">
+            <div id="error-plot" class="loading">Loading error analysis...</div>
+          </div>
+        </div>
+      </div>
     </div>
-
     <script type="module" src="/src/efficiency.ts"></script>
-</body>
-
+  </body>
 </html>
