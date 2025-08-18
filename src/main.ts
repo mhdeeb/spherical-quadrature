@@ -86,7 +86,7 @@ let currentWeightRange: NumericRange | null = null;
 
 async function init() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
+    scene.background = new THREE.Color(0xffffff);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 0, 3);
@@ -372,9 +372,9 @@ function updateInfoPanel() {
         'monte_carlo_clustered': 'Monte Carlo (Clustered)',
         'lebedev': 'Lebedev Quadrature',
         'product': 'Product Quadrature',
-        'HardinSloane': 'HardinSloane',
-        'WomersleySym': 'WomersleySym',
-        'WomersleyNonSym': 'WomersleyNonSym'
+        'HardinSloane': 'Spherical Design (HardinSloane)',
+        'WomersleySym': 'Spherical Design (WomersleySym)',
+        'WomersleyNonSym': 'Spherical Design (WomersleyNonSym)'
     };
     content += `<div class="info-row"><span class="info-label">Method:</span> ${quadNames[window.currentQuadMethod] || window.currentQuadMethod}</div>`;
 
@@ -877,9 +877,9 @@ function initializeGUI() {
         'Monte Carlo (Clustered)': 'monte_carlo_clustered',
         'Lebedev': 'lebedev',
         'Product Quadrature': 'product',
-        'HardinSloane': 'HardinSloane',
-        'WomersleySym': 'WomersleySym',
-        'WomersleyNonSym': 'WomersleyNonSym'
+        'Spherical Design (HardinSloane)': 'HardinSloane',
+        'Spherical Design (WomersleySym)': 'WomersleySym',
+        'Spherical Design (WomersleyNonSym)': 'WomersleyNonSym'
     }).name('Method').onChange((value: Window['currentQuadMethod']) => {
         updateState({ quadMethod: value });
     });

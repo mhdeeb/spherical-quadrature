@@ -69,27 +69,24 @@ function generateMonteCarloClustered(N: number) {
     return points;
 }
 
-async function generateLebedevPoints(N: number, byOrder: boolean = false): Promise<PointsCacheItem | null> {
+async function generateLebedevPoints(N: number, selectBy: 'points' | 'degree' = 'points'): Promise<PointsCacheItem | null> {
     try {
-        let num: number;
-        let response: Response;
+        const designMap = AVAILABLE_POINTS["lebedev"] as Record<number, number>; // points -> degrees
+        const pointKeys = Object.keys(designMap).map(k => Number(k));
 
-        if (byOrder) {
-            num = Number(Object.values(AVAILABLE_POINTS["lebedev"]).reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev)));
-            if (pointCache["lebedev"][num])
-                return pointCache["lebedev"][num];
-
-            response = await fetch(`PointDistFiles/lebedev/lebedev_${num.toString().padStart(3, '0')}`);
+        // Choose degree either by proximity in degree or by proximity in number of points
+        let chosenPoint: number;
+        if (selectBy === 'points') {
+            chosenPoint = pointKeys.reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
         } else {
-            num = Number(Object.keys(AVAILABLE_POINTS["lebedev"]).reduce((prev: string, curr: string) => (Math.abs(Number(curr) - N) < Math.abs(Number(prev) - N) ? curr : prev)));
-            for (let key of Object.keys(pointCache["lebedev"])) {
-                const cached = pointCache["lebedev"][Number(key)];
-                if (cached && cached.data.length == num)
-                    return cached;
-            }
-
-            response = await fetch(`PointDistFiles/lebedev/lebedev_${AVAILABLE_POINTS["lebedev"][num].toString().padStart(3, '0')}`);
+            chosenPoint = pointKeys.reduce((prev: number, curr: number) => (Math.abs(designMap[curr] - N) < Math.abs(designMap[prev] - N) ? curr : prev));
         }
+
+        if (pointCache["lebedev"][chosenPoint]) {
+            return pointCache["lebedev"][chosenPoint];
+        }
+
+        let response = await fetch(`PointDistFiles/lebedev/lebedev_${designMap[chosenPoint].toString().padStart(3, '0')}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -131,16 +128,12 @@ async function generateLebedevPoints(N: number, byOrder: boolean = false): Promi
             data: points,
             boundingBox,
             weightRange,
-            id: byOrder ? num : AVAILABLE_POINTS["lebedev"][num],
-            kind: 'lebedev',
-            meta: { byOrder }
+            id: chosenPoint,
+            kind: "lebedev",
+            meta: { selectBy }
         };
 
-        if (byOrder) {
-            pointCache["lebedev"][num] = item;
-        } else {
-            pointCache["lebedev"][AVAILABLE_POINTS["lebedev"][num]] = item;
-        }
+        pointCache["lebedev"][chosenPoint] = item;
 
         return item;
 
@@ -273,19 +266,19 @@ async function generateSphericalDesign(
     designType: 'HardinSloane' | 'WomersleySym' | 'WomersleyNonSym' = 'HardinSloane',
     selectBy: 'points' | 'degree' = 'points'
 ): Promise<PointsCacheItem | null> {
-    const designMap = AVAILABLE_POINTS[designType] as Record<number, number>; // degree -> points
-    const degreeKeys = Object.keys(designMap).map(k => Number(k));
+    const designMap = AVAILABLE_POINTS[designType] as Record<number, number>; // points -> degrees
+    const pointKeys = Object.keys(designMap).map(k => Number(k));
 
     // Choose degree either by proximity in degree or by proximity in number of points
-    let chosenDegree: number;
-    if (selectBy === 'degree') {
-        chosenDegree = degreeKeys.reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
+    let chosenPoint: number;
+    if (selectBy === 'points') {
+        chosenPoint = pointKeys.reduce((prev: number, curr: number) => (Math.abs(curr - N) < Math.abs(prev - N) ? curr : prev));
     } else {
-        chosenDegree = degreeKeys.reduce((prev: number, curr: number) => (Math.abs(designMap[curr] - N) < Math.abs(designMap[prev] - N) ? curr : prev));
+        chosenPoint = pointKeys.reduce((prev: number, curr: number) => (Math.abs(designMap[curr] - N) < Math.abs(designMap[prev] - N) ? curr : prev));
     }
 
-    if (pointCache[designType][chosenDegree]) {
-        return pointCache[designType][chosenDegree];
+    if (pointCache[designType][chosenPoint]) {
+        return pointCache[designType][chosenPoint];
     }
 
     try {
@@ -294,7 +287,7 @@ async function generateSphericalDesign(
             WomersleySym: "ss",
             WomersleyNonSym: "sf"
         } as const;
-        let response = await fetch(`PointDistFiles/sphdesigns/${designType}/${fileName[designType] + designMap[chosenDegree].toString().padStart(3, '0')}.${chosenDegree.toString().padStart(5, '0')}`);
+        let response = await fetch(`PointDistFiles/sphdesigns/${designType}/${fileName[designType] + designMap[chosenPoint].toString().padStart(3, '0')}.${chosenPoint.toString().padStart(5, '0')}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -340,17 +333,17 @@ async function generateSphericalDesign(
             data: points,
             boundingBox,
             weightRange,
-            id: chosenDegree,
+            id: chosenPoint,
             kind: designType,
             meta: { selectBy }
         };
 
-        pointCache[designType][chosenDegree] = item;
+        pointCache[designType][chosenPoint] = item;
 
         return item;
 
     } catch (error: any) {
-        console.warn(`Could not load ${designType} data for degree = ${chosenDegree}: ${error.message}`);
+        console.warn(`Could not load ${designType} data for point = ${chosenPoint}: ${error.message}`);
         return null;
     }
 }
