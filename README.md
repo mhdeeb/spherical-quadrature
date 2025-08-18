@@ -1,6 +1,8 @@
 # 3D Spherical Quadrature Visualization
 
-A high-performance Three.js implementation for interactive visualization of spherical quadrature methods and numerical integration on the unit sphere. Features dynamic 3D rendering with real-time computation and error analysis.
+A high-performance [Three.js](https://threejs.org/) implementation for interactive visualization of spherical quadrature methods and numerical integration on the unit sphere. Features dynamic 3D rendering with real-time computation and error analysis.
+
+[Demo](https://www.mhdeeb.com/grad)
 
 ## Features
 
