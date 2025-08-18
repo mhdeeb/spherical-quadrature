@@ -55,5 +55,5 @@ This visualization helps understand:
 
 ## Future Plans
 
-- *Schema Editor:* Allow users to edit grid schema manually or generate them with functions and export those schemas.
-- *Function Input:* Allow users to input functions have them be integrated on and tested against analytical solution if provided.
+- **Schema Editor**: Allow users to edit grid schema manually or generate them with functions and export those schemas.
+- **Function Input**: Allow users to input functions have them be integrated on and tested against analytical solution if provided.
