@@ -4,14 +4,8 @@ A high-performance Three.js implementation for interactive visualization of sphe
 
 ## Features
 
-### Visualization Modes
-- **Spherical Harmonics**: Interactive visualization of spherical harmonic functions Y_l^m
-- **Quadrature Points**: Display of integration points for different quadrature methods
-- **Test Functions**: Visualization of various test functions used to evaluate quadrature accuracy
-
 ### Quadrature Methods
-- **Monte Carlo (Uniform)**: Uniformly distributed random points on the sphere
-- **Monte Carlo (Clustered)**: Incorrectly distributed points showing clustering effects
+- **Monte Carlo**: Random points on the sphere
 - **Lebedev**: Spherical quadrature with octahedral symmetry
 - **Product Quadrature**: Cartesian product of 1D quadratures (Gauss-Legendre × Trapezoidal)
 - **Spherical Design**: Points with optimal spherical distribution properties
@@ -20,41 +14,14 @@ A high-performance Three.js implementation for interactive visualization of sphe
 - **Polynomial**: f = 1 + x + y² + x²y + x⁴ + y⁵ + x²y²z²
 - **Gaussian Peaks**: Sum of Gaussian functions with different centers
 - **Hyperbolic Tangent**: Smooth step function
-- **Spherical Harmonics**: For testing orthogonality properties
+- **Sign Functions**: Step function
 
 ## Usage
 
 ### Controls
-- **Mouse**: Drag to rotate the sphere manually
-- **Keyboard Shortcuts**:
-  - `1`: Load spherical harmonics demo
-  - `2`: Load quadrature points comparison
-  - `3`: Load function integration demo
-  - `Space`: Toggle auto-rotation
-  - `R`: Reset rotation
-
-### Integration
-Click "Compute Integral" to numerically integrate the current function using the selected quadrature method. The results show:
-- Numerical approximation
-- Analytical value (when known)
-- Absolute and relative errors
-
-## Mathematical Background
-
-### Spherical Integration
-The normalized integral over the unit sphere is:
-```
-I = (1/4π) ∫₀²π ∫₀π f(θ,φ) sin(φ) dφ dθ
-```
-
-### Spherical Harmonics
-Spherical harmonics Y_l^m(θ,φ) form a complete orthonormal basis on the sphere:
-```
-∫ Y_l^m Y_l'^m' dΩ = δ_ll' δ_mm'
-```
+- **Mouse**: Drag to rotate the sphere manually.
 
 ### Quadrature Methods
-
 1. **Monte Carlo**: Statistical sampling approach
    - Uniform: Correctly distributed points
    - Clustered: Demonstrates improper sampling
@@ -64,16 +31,6 @@ Spherical harmonics Y_l^m(θ,φ) form a complete orthonormal basis on the sphere
 3. **Spherical Designs**: t-designs integrate exactly all spherical harmonics up to degree t
 
 4. **Product Quadrature**: Combines 1D methods for φ and θ directions
-
-## Files Structure
-
-- `index.html`: Main HTML interface
-- `three-sketch.js`: Three.js main application and rendering functions
-- `three-controls.js`: Three.js OrbitControls implementation
-- `sphere-quadrature.js`: Implementation of integration methods
-- `spherical-harmonics.js`: Spherical harmonic calculations
-- `test-functions.js`: Mathematical test functions
-- `ui-controls.js`: User interface event handlers
 
 ## Technical Implementation
 
@@ -94,24 +51,9 @@ Spherical harmonics Y_l^m(θ,φ) form a complete orthonormal basis on the sphere
 This visualization helps understand:
 - How different quadrature methods distribute points on the sphere
 - The relationship between point distribution and integration accuracy
-- Properties of spherical harmonics and their visualization
 - Convergence behavior of numerical integration methods
 
-## Browser Compatibility
+## Future Plans
 
-Requires a modern web browser with WebGL support for 3D rendering. Three.js provides excellent cross-browser compatibility:
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
-- Enhanced performance on all platforms compared to p5.js implementation
-
-## Related Work
-
-Based on the Python implementation by Casper Beentjes:
-- Original repository: [Quadratures on Unit Sphere](https://github.com/cbeentjes/quadratures-on-unit-sphere)
-- Essay: [Numerical Integration on the Sphere](http://people.maths.ox.ac.uk/beentjes/Essays/)
-
-## License
-
-This code is provided for educational purposes. See individual function implementations for specific mathematical references and citations.
+- *Schema Editor:* Allow users to edit grid schema manually or generate them with functions and export those schemas.
+- *Function Input:* Allow users to input functions have them be integrated on and tested against analytical solution if provided.
