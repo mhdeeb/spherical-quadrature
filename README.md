@@ -2,6 +2,8 @@
 
 A high-performance [Three.js](https://threejs.org/) implementation for interactive visualization of spherical quadrature methods and numerical integration on the unit sphere. Features dynamic 3D rendering with real-time computation and error analysis.
 
+<img width="1660" height="775" alt="image" src="https://github.com/user-attachments/assets/6c9d1921-886e-4a5a-849c-47193c679137" />
+
 [Demo](https://www.mhdeeb.com/grad)
 
 ## Features
