@@ -57,6 +57,35 @@ This visualization helps understand:
 - The relationship between point distribution and integration accuracy
 - Convergence behavior of numerical integration methods
 
+## Local deployment
+
+### Clone repo
+
+```bash
+git clone https://github.com/mhdeeb/spherical-quadrature.git
+```
+
+### Install bun
+
+#### For Linux/MacOS
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+#### For Windows
+
+```cmd
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+### Run
+
+```bash
+cd spherical-quadrature
+bun dev
+```
+
 ## Future Plans
 
 - **Schema Editor**: Allow users to edit grid schema manually or generate them with functions and export those schemas.
