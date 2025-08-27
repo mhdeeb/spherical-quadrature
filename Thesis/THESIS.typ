@@ -1,24 +1,77 @@
-#import "/templates/latex.typ": *
+#import "/templates/thesis.typ": *
 #import "@preview/subpar:0.2.2"
+#import "@preview/illc-mol-thesis:0.2.0": *
+
 
 
 #show: article
-#set page(margin: (
-  top: 3cm,
-  bottom: 2cm,
-  x: 2.5cm,
-))
+#set page(margin: (left: 1.5in, rest: 1in))
 #set math.equation(numbering: "(1)")
 
+// #maketitle(
+//   title: "Quadratures on the unit sphere: A Comparative Analysis of Gaussian and Chebyshev Schemes",
+//   authors: (
+//     "Mohamed Hussien El-Deeb",
+//   ),
+//   ID: "201900052",
+//   date: false,
+// )
+// #mol-titlepage(
+//   title: "Title of the Thesis",
+//   /* Only one supervisor? The singleton array ("Dr Jack Smith",) needs the
+//      trailing comma. */
+//   supervisors: ("Dr Amr Mohameed",),
+//   // committee: (
+//   //   "Dr Jack Smith",
+//   //   "Prof Dr Jane Williams",
+//   //   "Dr Jill Jones",
+//   //   "Dr Albert Heijn"),
+//   degree: "MSc in PEU"
+// )
 
-#maketitle(
-  title: "Thesis: ",
-  authors: (
-    "Mohamed Hussien El-Deeb (201900052)",
-  ),
-  date: false,
-)
+// #show: mol-thesis
 
+#let thesis-title = "Quadratures on The Unit Sphere: A Comparative Analysis of Gaussian and Chebyshev Schemes"
+#let author-name = "Mohamed Hussien El-Deeb"
+#let author-id = "201900052"
+#let supervisor-name = "Dr. Amr Mohameed"
+#let university-name = "University of Science & Technology at Zewail City"
+#let department-name = "Department of Physics of Earth and Universe"
+#let thesis-date = "August 2025"
+
+#align(center)[
+  #v(3cm)
+  #text(size: 20pt, weight: "bold")[#thesis-title]
+  #v(1mm)
+
+  #text(size: 12pt)[by]
+  #v(0.5mm)
+  #text(size: 14pt, weight: "bold")[#author-name]\
+  #text(size: 14pt, weight: "bold")[#author-id]
+  #v(1.5mm)
+
+  #text(size: 12pt)[Supervised by]
+  #v(0.5mm)
+  #text(size: 14pt, weight: "bold")[#supervisor-name]
+  #v(1cm)
+
+    // Placeholder for university logo
+  #box(
+    width: 100pt,
+    height: 120pt,
+    // stroke: 1pt + black,
+    align(center + horizon)[#image("image (17).png", width: 230%)]
+  )
+
+  #v(1cm)
+  #text(size: 12pt,  weight: "bold")[A Thesis Submitted for the degree of Bachelor of Science]
+  #v(1mm)
+  #text(size: 12pt,  weight: "bold")[#department-name]
+  #v(0.5mm)
+  #text(size: 12pt,  weight: "bold")[#university-name]
+  #v(2cm)
+  #text(size: 12pt,  weight: "bold")[#thesis-date]
+]
 
 #tableofcontents()
 
