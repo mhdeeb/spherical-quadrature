@@ -1,5 +1,5 @@
-import { SPHERE_RADIUS, AVAILABLE_POINTS } from './constants.ts';
-import type { CacheItem, BoundingBox3D, NumericRange } from './cache-types.ts';
+import { SPHERE_RADIUS, AVAILABLE_POINTS } from './constants';
+import type { CacheItem, BoundingBox3D, NumericRange } from './cache-types';
 
 type PointsCacheItem = CacheItem<Point[]>;
 
@@ -86,7 +86,7 @@ async function generateLebedevPoints(N: number, selectBy: 'points' | 'degree' = 
             return pointCache["lebedev"][chosenPoint];
         }
 
-        let response = await fetch(`PointDistFiles/lebedev/lebedev_${designMap[chosenPoint].toString().padStart(3, '0')}`);
+        let response = await fetch(`https://www.mhdeeb.com/grad/PointDistFiles/lebedev/lebedev_${designMap[chosenPoint].toString().padStart(3, '0')}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -287,7 +287,7 @@ async function generateSphericalDesign(
             WomersleySym: "ss",
             WomersleyNonSym: "sf"
         } as const;
-        let response = await fetch(`PointDistFiles/sphdesigns/${designType}/${fileName[designType] + designMap[chosenPoint].toString().padStart(3, '0')}.${chosenPoint.toString().padStart(5, '0')}`);
+        let response = await fetch(`https://www.mhdeeb.com/grad/PointDistFiles/sphdesigns/${designType}/${fileName[designType] + designMap[chosenPoint].toString().padStart(3, '0')}.${chosenPoint.toString().padStart(5, '0')}`);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);

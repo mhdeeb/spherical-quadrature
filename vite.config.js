@@ -11,4 +11,7 @@ export default defineConfig({
     },
   },
   base: "/grad",
+  server: {
+    host: true,
+  }
 })

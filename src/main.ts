@@ -8,12 +8,12 @@ import {
     generateProductQuadrature,
     generateLebedevPoints,
     generateSphericalDesign,
-} from './sphere-quadrature-module.ts';
+} from './sphere-quadrature-module';
 
-import testFunctions from './test-functions.ts';
+import testFunctions from './test-functions';
 
-import { SPHERE_RADIUS } from './constants.ts';
-import type { NumericRange } from './cache-types.ts';
+import { SPHERE_RADIUS } from './constants';
+import type { NumericRange } from './cache-types';
 
 type QuadPoint = { x?: number | null; y?: number | null; z?: number | null; weight?: number | null; phi?: number | null; theta?: number | null };
 
