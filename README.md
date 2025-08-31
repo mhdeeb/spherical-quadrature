@@ -90,3 +90,8 @@ bun dev
 
 - **Schema Editor**: Allow users to edit grid schema manually or generate them with functions and export those schemas.
 - **Function Input**: Allow users to input functions have them be integrated on and tested against analytical solution if provided.
+
+## Credits
+
+- Burkardt, J. Quadrature Rules for the Sphere <https://people.sc.fsu.edu/~jburkardt/datasets/sphere_lebedev_rule/sphere_lebedev_rule.html>
+- Hardin, R. H. & Sloane, N. J. A. Spherical Designs <https://neilsloane.com/sphdesigns/>
